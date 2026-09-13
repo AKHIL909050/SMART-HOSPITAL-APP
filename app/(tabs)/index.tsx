@@ -23,30 +23,44 @@ export default function HomeScreen() {
   // STATE
   // ==================================================
   const [userName, setUserName] = useState("User");
-    useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
+  useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    console.log("AUTH USER:", user);
+
+    if (!user) {
+      console.log("NO USER LOGGED IN");
+      setUserName("User");
+      return;
+    }
+
+    console.log("USER UID:", user.uid);
+
+    try {
+      const userDoc = await getDoc(
+        doc(db, "users", user.uid)
+      );
+
+      console.log("DOCUMENT EXISTS:", userDoc.exists());
+
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+
+        console.log("FIRESTORE DATA:", userData);
+        console.log("NAME:", userData.name);
+
+        setUserName(userData.name || "User");
+      } else {
+        console.log("NO FIRESTORE DOCUMENT FOUND");
         setUserName("User");
-        return;
       }
+    } catch (error) {
+      console.log("FIRESTORE ERROR:", error);
+    }
+  });
 
-      try {
-        const userDoc = await getDoc(
-          doc(db, "users", user.uid)
-        );
+  return unsubscribe;
+}, []);
 
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-
-          setUserName(userData.name || "User");
-        }
-      } catch (error) {
-        console.log("Error loading user:", error);
-      }
-    });
-
-    return unsubscribe;
-  }, []);
   const [location, setLocation] =
     useState<Location.LocationObject | null>(null);
 
