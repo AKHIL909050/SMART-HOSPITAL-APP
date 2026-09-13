@@ -2,10 +2,12 @@ import {
     Ionicons,
     MaterialCommunityIcons,
 } from "@expo/vector-icons";
-
 import { router } from "expo-router";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebase/config";
 
 import {
+    Alert,
     Pressable,
     StyleSheet,
     Text,
@@ -17,11 +19,44 @@ import { useState } from "react";
 export default function LoginScreen() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  
+  const handleLogin = async () => {
+      if (!email.trim() || !password) {
+        Alert.alert(
+          "Missing Information",
+          "Please enter your email and password."
+        );
+        return;
+      }
 
-  const handleLogin = () => {
-    router.replace("/(tabs)");
-  };
+      try {
+        await signInWithEmailAndPassword(
+          auth,
+          email.trim(),
+          password
+        );
 
+        router.replace("/(tabs)");
+      } catch (error: any) {
+        console.log(error);
+
+        let message = "Unable to log in. Please try again.";
+
+        if (
+          error.code === "auth/invalid-credential" ||
+          error.code === "auth/user-not-found" ||
+          error.code === "auth/wrong-password"
+        ) {
+          message = "Incorrect email or password.";
+        } else if (error.code === "auth/invalid-email") {
+          message = "Please enter a valid email address.";
+        }
+
+        Alert.alert("Login Failed", message);
+      }
+    };
   return (
     <View style={styles.screen}>
 
@@ -81,7 +116,9 @@ export default function LoginScreen() {
           style={styles.input}
           placeholder="Email or Phone Number"
           placeholderTextColor="#819497"
-          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
         />
       </View>
 
@@ -97,6 +134,8 @@ export default function LoginScreen() {
           style={styles.input}
           placeholder="Password"
           placeholderTextColor="#819497"
+          value={password}
+          onChangeText={setPassword}
           secureTextEntry={!passwordVisible}
         />
 

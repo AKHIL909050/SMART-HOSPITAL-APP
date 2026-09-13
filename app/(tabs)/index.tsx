@@ -1,7 +1,8 @@
 import * as Location from "expo-location";
 import { router } from "expo-router";
-import { useState } from "react";
-
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -11,6 +12,7 @@ import {
   TextInput,
   View
 } from "react-native";
+import { auth, db } from "../../firebase/config";
 
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -20,7 +22,31 @@ export default function HomeScreen() {
   // ==================================================
   // STATE
   // ==================================================
+  const [userName, setUserName] = useState("User");
+    useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setUserName("User");
+        return;
+      }
 
+      try {
+        const userDoc = await getDoc(
+          doc(db, "users", user.uid)
+        );
+
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+
+          setUserName(userData.name || "User");
+        }
+      } catch (error) {
+        console.log("Error loading user:", error);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
   const [location, setLocation] =
     useState<Location.LocationObject | null>(null);
 
@@ -378,7 +404,7 @@ export default function HomeScreen() {
             </Text>
 
             <Text style={styles.userName}>
-              Akhilesh
+              {userName}
             </Text>
 
             <View style={styles.locationRow}>

@@ -3,7 +3,10 @@ import {
     MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useState } from "react";
+import { auth, db } from "../firebase/config";
 
 import {
     Alert,
@@ -16,6 +19,11 @@ import {
 } from "react-native";
 
 export default function SignupScreen() {
+    const [name, setName] = useState("");
+const [email, setEmail] = useState("");
+const [phone, setPhone] = useState("");
+const [password, setPassword] = useState("");
+const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordVisible, setPasswordVisible] =
     useState(false);
 
@@ -25,10 +33,37 @@ export default function SignupScreen() {
   const [rememberMe, setRememberMe] =
     useState(false);
 
-  const handleSignup = () => {
+const handleSignup = async () => {
+  if (!name.trim() || !email.trim() || !phone.trim() || !password) {
+    Alert.alert("Missing Information", "Please fill in all fields.");
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    Alert.alert("Password Error", "Passwords do not match.");
+    return;
+  }
+
+  try {
+    const userCredential =
+      await createUserWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
+
+    const user = userCredential.user;
+
+    await setDoc(doc(db, "users", user.uid), {
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      createdAt: serverTimestamp(),
+    });
+
     Alert.alert(
       "Account Created",
-      "Registration will be connected to the database soon.",
+      "Your Smart Hospital account has been created.",
       [
         {
           text: "Continue",
@@ -36,7 +71,22 @@ export default function SignupScreen() {
         },
       ]
     );
-  };
+  } catch (error: any) {
+    console.log(error);
+
+    let message = "Something went wrong. Please try again.";
+
+    if (error.code === "auth/email-already-in-use") {
+      message = "An account with this email already exists.";
+    } else if (error.code === "auth/invalid-email") {
+      message = "Please enter a valid email address.";
+    } else if (error.code === "auth/weak-password") {
+      message = "Password should be at least 6 characters.";
+    }
+
+    Alert.alert("Sign Up Failed", message);
+  }
+};
 
   return (
     <View style={styles.screen}>
@@ -105,6 +155,9 @@ export default function SignupScreen() {
             style={styles.input}
             placeholder="Full Name"
             placeholderTextColor="#819497"
+            value={name}
+            onChangeText={setName}
+
           />
         </View>
 
@@ -122,6 +175,8 @@ export default function SignupScreen() {
             placeholderTextColor="#819497"
             keyboardType="email-address"
             autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
           />
         </View>
 
@@ -138,6 +193,8 @@ export default function SignupScreen() {
             placeholder="Phone Number"
             placeholderTextColor="#819497"
             keyboardType="phone-pad"
+            value={phone}
+            onChangeText={setPhone}
           />
         </View>
 
@@ -154,6 +211,8 @@ export default function SignupScreen() {
             placeholder="Password"
             placeholderTextColor="#819497"
             secureTextEntry={!passwordVisible}
+            value={password}
+            onChangeText={setPassword}
           />
 
           <Pressable
@@ -186,6 +245,8 @@ export default function SignupScreen() {
             placeholder="Confirm Password"
             placeholderTextColor="#819497"
             secureTextEntry={!confirmPasswordVisible}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
           />
 
           <Pressable
