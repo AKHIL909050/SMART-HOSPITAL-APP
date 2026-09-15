@@ -38,7 +38,7 @@ export default function LoginScreen() {
           password
         );
 
-        router.replace("/(tabs)");
+        router.replace("/(tabs)/home");
       } catch (error: any) {
         console.log(error);
 
@@ -70,7 +70,7 @@ export default function LoginScreen() {
           />
         </Pressable>
 
-        <Pressable onPress={() => router.replace("/(tabs)")}>
+        <Pressable onPress={() => router.replace("/(tabs)/home")}>
           <Text style={styles.skipText}>Skip</Text>
         </Pressable>
       </View>

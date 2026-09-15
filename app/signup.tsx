@@ -67,7 +67,7 @@ const handleSignup = async () => {
       [
         {
           text: "Continue",
-          onPress: () => router.replace("/(tabs)"),
+          onPress: () => router.replace("/(tabs)/home"),
         },
       ]
     );
@@ -106,7 +106,7 @@ const handleSignup = async () => {
           </Pressable>
 
           <Pressable
-            onPress={() => router.replace("/(tabs)")}
+            onPress={() => router.replace("/(tabs)/home")}
           >
             <Text style={styles.skipText}>
               Skip

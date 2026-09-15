@@ -22,7 +22,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="home"
         options={{
           title: "Home",
           tabBarIcon: ({ color, size }) => (
@@ -32,7 +32,7 @@ export default function TabsLayout() {
       />
 
       <Tabs.Screen
-        name="explore"
+        name="search"
         options={{
           title: "Search",
           tabBarIcon: ({ color, size }) => (

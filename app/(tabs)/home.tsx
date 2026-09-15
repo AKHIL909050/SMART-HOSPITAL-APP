@@ -16,7 +16,7 @@ import { auth, db } from "../../firebase/config";
 
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
-const API_URL = "http://192.168.1.247:8000";
+const API_URL = "http://192.168.1.245:8000";
 
 export default function HomeScreen() {
   // ==================================================
@@ -153,14 +153,14 @@ export default function HomeScreen() {
       );
       return;
     }
-
-  router.push({
-    pathname: "/explore",
-    params: {
-      search: service.trim(),
-    },
-  });
-};
+  
+    router.push({
+      pathname: "/result",
+      params: {
+        search: service.trim(),
+      },
+    });
+  };
   // ==================================================
   // SEARCH HOSPITALS
   // ==================================================
@@ -325,70 +325,13 @@ export default function HomeScreen() {
   }; 
 
  
-  const searchHospitalsByEmergency = async (
-    emergency: string
-  ) => {
-    setService(emergency);
-    setSearchLoading(true);
-    setSearchResults([]);
-    setRecommendations([]);
-  
-    try {
-      // Get user's current location
-      let currentLocation = location;
-    
-      if (!currentLocation) {
-        const { status } =
-          await Location.requestForegroundPermissionsAsync();
-      
-        if (status !== "granted") {
-          Alert.alert(
-            "Location Required",
-            "Please allow location access to find nearby emergency hospitals."
-          );
-          return;
-        }
-      
-        currentLocation =
-          await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
-          });
-        
-        setLocation(currentLocation);
-      }
-    
-      const { latitude, longitude } =
-        currentLocation.coords;
-    
-      // Find nearby hospitals
-      const response = await fetch(
-        `${API_URL}/hospitals/nearby?latitude=${latitude}&longitude=${longitude}`
-      );
-    
-      if (!response.ok) {
-        throw new Error("Emergency hospital search failed");
-      }
-    
-      const data = await response.json();
-    
-      setSearchResults(data.hospitals);
-    
-      if (!data.hospitals || data.hospitals.length === 0) {
-        Alert.alert(
-          "No Nearby Hospitals",
-          `No nearby hospitals were found for ${emergency}.`
-        );
-      }
-    } catch (error) {
-      console.log(error);
-    
-      Alert.alert(
-        "Connection Error",
-        "Could not find nearby emergency hospitals."
-      );
-    } finally {
-      setSearchLoading(false);
-    }
+  const searchHospitalsByEmergency = (emergency: string) => {
+    router.push({
+      pathname: "/result",
+      params: {
+        search: emergency,
+      },
+    });
   };
   
     
