@@ -1,7 +1,7 @@
 import { Stack, useLocalSearchParams } from "expo-router";
 import {
-  Button,
   Linking,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,95 +18,144 @@ export default function DetailsScreen() {
   const name =
     params.name?.toString() || "Unknown Hospital";
 
-  const city =
-    params.city?.toString() || "Unknown";
+  const address =
+    params.address?.toString() || "Address not available";
 
-  const state =
-    params.state?.toString() || "Unknown";
+  const district =
+    params.district?.toString() || "Not available";
 
-  const distance =
-    params.distance?.toString() || "Not calculated";
+  const pincode =
+    params.pincode?.toString() || "Not available";
 
-  const latitude =
-    params.latitude?.toString() || "";
+  const hospitalType =
+    params.hospital_type?.toString() || "Not available";
 
-  const longitude =
-    params.longitude?.toString() || "";
+  const careType =
+    params.care_type?.toString() || "Not available";
 
   // =====================================================
   // HOSPITAL DATA
   // =====================================================
 
-  const treatmentCost =
-    params.treatment_cost?.toString() ||
-    params.cost?.toString() ||
-    "Not available";
+  const specialties =
+    params.specialties?.toString() || "Not available";
 
-  const qualityScore =
-    params.quality_score?.toString() ||
-    params.quality?.toString() ||
-    "Not available";
+  const facilities =
+    params.facilities?.toString() || "Not available";
 
-  const recommendationScore =
-    params.recommendation_score?.toString() ||
-    params.recommendation?.toString() ||
-    "Not available";
+  const accreditation =
+    params.accreditation?.toString() || "Not available";
 
-  const costScore =
-    params.cost_score?.toString() ||
-    "Not available";
+  const establishedYear =
+    params.established_year?.toString() || "Not available";
 
-  const qualityNormalized =
-    params.quality_score_normalized?.toString() ||
-    "Not available";
+  const doctorsCount =
+    params.doctors_count?.toString() || "Not available";
 
-  const distanceScore =
-    params.distance_score?.toString() ||
-    "Not available";
+  const specialistsCount =
+    params.specialists_count?.toString() || "Not available";
 
-  const services =
-    params.services?.toString() ||
-    "Not available";
+  const totalBeds =
+    params.total_beds?.toString() || "Not available";
 
+  const emergencyServices =
+    params.emergency_services?.toString() || "Not available";
+
+  const telephone =
+    params.telephone?.toString() || "Not available";
+
+  const emergencyNumber =
+    params.emergency_number?.toString() || "Not available";
+
+  const website =
+    params.website?.toString() || "Not available";
+
+  const ayush =
+    params.ayush?.toString() || "Not available";
+
+  const formatList = (text: string) => {
+    return text
+      .split(/\\n|,/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+  };
   // =====================================================
-  // OPEN GOOGLE MAPS
+  // OPEN WEBSITE
   // =====================================================
 
-  const openMap = async () => {
-    if (!latitude || !longitude) {
+  const openWebsite = async () => {
+    if (
+      !website ||
+      website === "Not available"
+    ) {
       return;
     }
 
-    const mapUrl =
-      `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+    let url = website.trim();
+
+    if (
+      !url.startsWith("http://") &&
+      !url.startsWith("https://")
+    ) {
+      url = `https://${url}`;
+    }
 
     try {
-      await Linking.openURL(mapUrl);
+      await Linking.openURL(url);
     } catch (error) {
-      console.log("Could not open Google Maps", error);
+      console.log(
+        "Could not open hospital website",
+        error
+      );
     }
   };
 
   // =====================================================
-  // RECOMMENDATION MESSAGE
+  // CALL HOSPITAL
   // =====================================================
 
-  const getRecommendationMessage = () => {
-    if (recommendationScore === "Not available") {
-      return "Recommendation score is not available.";
+  const callHospital = async () => {
+    if (
+      !telephone ||
+      telephone === "Not available"
+    ) {
+      return;
     }
 
-    const score = parseFloat(recommendationScore);
+    try {
+      await Linking.openURL(
+        `tel:${telephone}`
+      );
+    } catch (error) {
+      console.log(
+        "Could not call hospital",
+        error
+      );
+    }
+  };
 
-    if (score >= 80) {
-      return "Highly recommended based on cost, quality and distance.";
+  // =====================================================
+  // CALL EMERGENCY
+  // =====================================================
+
+  const callEmergency = async () => {
+    if (
+      !emergencyNumber ||
+      emergencyNumber === "Not available"
+    ) {
+      return;
     }
 
-    if (score >= 60) {
-      return "A good option based on the available information.";
+    try {
+      await Linking.openURL(
+        `tel:${emergencyNumber}`
+      );
+    } catch (error) {
+      console.log(
+        "Could not call emergency number",
+        error
+      );
     }
-
-    return "Recommended based on the available hospital information.";
   };
 
   // =====================================================
@@ -123,251 +172,331 @@ export default function DetailsScreen() {
 
       <ScrollView
         contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
       >
-
         {/* =================================================
             HEADER
         ================================================= */}
 
         <View style={styles.header}>
-
-          <Text style={styles.hospitalIcon}>
-            🏥
-          </Text>
+          <View style={styles.hospitalIconBox}>
+            <Text style={styles.hospitalIcon}>
+              🏥
+            </Text>
+          </View>
 
           <Text style={styles.title}>
             {name}
           </Text>
 
           <Text style={styles.location}>
-            📍 {city}, {state}
+            📍 {district}
           </Text>
-
         </View>
 
-
         {/* =================================================
-            RECOMMENDATION SCORE
-        ================================================= */}
-
-        {recommendationScore !== "Not available" && (
-          <View style={styles.recommendationBox}>
-
-            <Text style={styles.recommendationTitle}>
-              🏆 Recommendation Score
-            </Text>
-
-            <Text style={styles.recommendationScore}>
-              {recommendationScore}/100
-            </Text>
-
-            <Text style={styles.recommendationText}>
-              {getRecommendationMessage()}
-            </Text>
-
-          </View>
-        )}
-
-
-        {/* =================================================
-            HOSPITAL INFORMATION
+            BASIC INFORMATION
         ================================================= */}
 
         <View style={styles.card}>
-
           <Text style={styles.cardTitle}>
             📋 Hospital Information
           </Text>
 
           <View style={styles.infoRow}>
-
             <Text style={styles.label}>
-              📍 Location
+              📍 Address
             </Text>
 
             <Text style={styles.value}>
-              {city}, {state}
+              {address}
             </Text>
-
           </View>
 
           <View style={styles.infoRow}>
-
             <Text style={styles.label}>
-              📏 Distance
+              🏙️ District
             </Text>
 
             <Text style={styles.value}>
-              {distance === "Not calculated"
-                ? distance
-                : `${distance} km`}
+              {district}
             </Text>
-
           </View>
 
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              📮 Pincode
+            </Text>
+
+            <Text style={styles.value}>
+              {pincode}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              🏥 Hospital Type
+            </Text>
+
+            <Text style={styles.value}>
+              {hospitalType}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              🩺 Care Type
+            </Text>
+
+            <Text style={styles.value}>
+              {careType}
+            </Text>
+          </View>
         </View>
 
+        {/* =================================================
+            MEDICAL SERVICES
+        ================================================= */}
+
+    {/* MEDICAL SERVICES */}
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>
+        🩺 Medical Specialties
+      </Text>
+
+      {formatList(specialties).map((item, index) => (
+        <View style={styles.listItem} key={index}>
+          <Text style={styles.bullet}>•</Text>
+      
+          <Text style={styles.listText}>
+            {item}
+          </Text>
+        </View>
+      ))}
+    </View>
 
         {/* =================================================
-            SERVICES
+            FACILITIES
+        ================================================= */}
+
+    {/* FACILITIES */}
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>
+        🏢 Facilities
+      </Text>
+
+      {formatList(facilities).map((item, index) => (
+        <View style={styles.listItem} key={index}>
+          <Text style={styles.bullet}>•</Text>
+      
+          <Text style={styles.listText}>
+            {item}
+          </Text>
+        </View>
+      ))}
+    </View>
+
+        {/* =================================================
+            HOSPITAL DETAILS
         ================================================= */}
 
         <View style={styles.card}>
-
           <Text style={styles.cardTitle}>
-            🩺 Medical Services
+            📊 Hospital Details
           </Text>
 
-          <Text style={styles.services}>
-            {services}
-          </Text>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              🏅 Accreditation
+            </Text>
 
+            <Text style={styles.value}>
+              {accreditation}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              📅 Established
+            </Text>
+
+            <Text style={styles.value}>
+              {establishedYear}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              👨‍⚕️ Doctors
+            </Text>
+
+            <Text style={styles.value}>
+              {doctorsCount}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              👨‍⚕️ Specialists
+            </Text>
+
+            <Text style={styles.value}>
+              {specialistsCount}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              🛏️ Total Beds
+            </Text>
+
+            <Text style={styles.value}>
+              {totalBeds}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              🚑 Emergency Services
+            </Text>
+
+            <Text style={styles.value}>
+              {emergencyServices}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              🌿 AYUSH
+            </Text>
+
+            <Text style={styles.value}>
+              {ayush}
+            </Text>
+          </View>
         </View>
 
+        {/* =================================================
+            CONTACT
+        ================================================= */}
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>
+            📞 Contact Information
+          </Text>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              ☎️ Telephone
+            </Text>
+
+            <Text style={styles.value}>
+              {telephone}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>
+              🚨 Emergency Number
+            </Text>
+
+            <Text style={styles.value}>
+              {emergencyNumber}
+            </Text>
+          </View>
+
+          {telephone !== "Not available" && (
+            <Pressable
+              style={styles.actionButton}
+              onPress={callHospital}
+            >
+              <Text style={styles.actionButtonText}>
+                📞 Call Hospital
+              </Text>
+            </Pressable>
+          )}
+
+          {emergencyNumber !== "Not available" && (
+            <Pressable
+              style={styles.emergencyButton}
+              onPress={callEmergency}
+            >
+              <Text style={styles.emergencyButtonText}>
+                🚨 Call Emergency
+              </Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* =================================================
+            WEBSITE
+        ================================================= */}
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>
+            🌐 Hospital Website
+          </Text>
+
+          <Text style={styles.description}>
+            {website}
+          </Text>
+
+          {website !== "Not available" && (
+            <Pressable
+              style={styles.actionButton}
+              onPress={openWebsite}
+            >
+              <Text style={styles.actionButtonText}>
+                🌐 Open Website
+              </Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* =================================================
+            DISTANCE
+        ================================================= */}
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>
+            📏 Distance
+          </Text>
+
+          <Text style={styles.comingSoon}>
+            Distance calculation coming soon
+          </Text>
+
+          <Text style={styles.note}>
+            We will add hospital coordinates and
+            calculate the distance from your current
+            location later.
+          </Text>
+        </View>
 
         {/* =================================================
             TREATMENT COST
         ================================================= */}
 
         <View style={styles.card}>
-
           <Text style={styles.cardTitle}>
             💰 Treatment Cost
           </Text>
 
-          <Text style={styles.cost}>
-            {treatmentCost === "Not available"
-              ? treatmentCost
-              : `₹${treatmentCost}`}
+          <Text style={styles.comingSoon}>
+            Coming soon
           </Text>
 
           <Text style={styles.note}>
-            Estimated treatment cost
+            Treatment pricing will be added using
+            the hospital tariff information later.
           </Text>
-
         </View>
-
-
-        {/* =================================================
-            QUALITY
-        ================================================= */}
-
-        <View style={styles.card}>
-
-          <Text style={styles.cardTitle}>
-            ⭐ Quality
-          </Text>
-
-          <Text style={styles.quality}>
-            {qualityScore === "Not available"
-              ? qualityScore
-              : `${qualityScore}/5`}
-          </Text>
-
-          <Text style={styles.note}>
-            Hospital quality rating
-          </Text>
-
-        </View>
-
-
-        {/* =================================================
-            RECOMMENDATION BREAKDOWN
-        ================================================= */}
-
-        {recommendationScore !== "Not available" && (
-          <View style={styles.card}>
-
-            <Text style={styles.cardTitle}>
-              📊 Recommendation Breakdown
-            </Text>
-
-            <View style={styles.scoreRow}>
-
-              <Text style={styles.scoreLabel}>
-                💰 Cost Score
-              </Text>
-
-              <Text style={styles.scoreValue}>
-                {costScore}/100
-              </Text>
-
-            </View>
-
-            <View style={styles.scoreRow}>
-
-              <Text style={styles.scoreLabel}>
-                ⭐ Quality Score
-              </Text>
-
-              <Text style={styles.scoreValue}>
-                {qualityNormalized}/100
-              </Text>
-
-            </View>
-
-            <View style={styles.scoreRow}>
-
-              <Text style={styles.scoreLabel}>
-                📏 Distance Score
-              </Text>
-
-              <Text style={styles.scoreValue}>
-                {distanceScore}/100
-              </Text>
-
-            </View>
-
-            {/* WEIGHTS */}
-
-            <View style={styles.weightsBox}>
-
-              <Text style={styles.weightsTitle}>
-                Ranking Weights
-              </Text>
-
-              <Text style={styles.weightText}>
-                💰 Cost: 40%
-              </Text>
-
-              <Text style={styles.weightText}>
-                ⭐ Quality: 35%
-              </Text>
-
-              <Text style={styles.weightText}>
-                📏 Distance: 25%
-              </Text>
-
-            </View>
-
-          </View>
-        )}
-
-
-        {/* =================================================
-            MAP
-        ================================================= */}
-
-        <View style={styles.mapSection}>
-
-          <Text style={styles.cardTitle}>
-            🗺️ Hospital Location
-          </Text>
-
-          <Button
-            title="Open in Google Maps"
-            onPress={openMap}
-          />
-
-        </View>
-
 
         {/* =================================================
             FUTURE FEATURES
         ================================================= */}
 
         <View style={styles.futureBox}>
-
           <Text style={styles.futureTitle}>
             🚀 Coming Soon
           </Text>
@@ -381,34 +510,27 @@ export default function DetailsScreen() {
           </Text>
 
           <Text style={styles.futureText}>
-            • Hospital phone number
-          </Text>
-
-          <Text style={styles.futureText}>
-            • Emergency services
-          </Text>
-
-          <Text style={styles.futureText}>
             • Hospital reviews
           </Text>
 
+          <Text style={styles.futureText}>
+            • Advanced recommendation scoring
+          </Text>
         </View>
-
       </ScrollView>
     </>
   );
 }
-
 
 // =====================================================
 // STYLES
 // =====================================================
 
 const styles = StyleSheet.create({
-
   container: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 50,
+    backgroundColor: "#F8FBFA",
   },
 
   // ===================================================
@@ -420,51 +542,32 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
 
+  hospitalIconBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 22,
+    backgroundColor: "#EAF5F3",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+
   hospitalIcon: {
-    fontSize: 50,
-    marginBottom: 10,
+    fontSize: 43,
   },
 
   title: {
-    fontSize: 26,
-    fontWeight: "bold",
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#173B3A",
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: 7,
   },
 
   location: {
-    fontSize: 16,
+    fontSize: 14,
+    color: "#718387",
     textAlign: "center",
-  },
-
-  // ===================================================
-  // RECOMMENDATION
-  // ===================================================
-
-  recommendationBox: {
-    borderWidth: 2,
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 20,
-    alignItems: "center",
-  },
-
-  recommendationTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-
-  recommendationScore: {
-    fontSize: 32,
-    fontWeight: "bold",
-    marginBottom: 5,
-  },
-
-  recommendationText: {
-    fontSize: 13,
-    textAlign: "center",
-    lineHeight: 20,
   },
 
   // ===================================================
@@ -472,113 +575,117 @@ const styles = StyleSheet.create({
   // ===================================================
 
   card: {
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
+    borderColor: "#E2EBE9",
+    borderRadius: 16,
+    padding: 17,
     marginBottom: 15,
   },
 
   cardTitle: {
-    fontSize: 19,
-    fontWeight: "bold",
-    marginBottom: 12,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#173B3A",
+    marginBottom: 14,
   },
 
+  // ===================================================
+  // INFORMATION
+  // ===================================================
+
   infoRow: {
-    marginBottom: 12,
+    marginBottom: 13,
+  },
+
+  listItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  
+  bullet: {
+    fontSize: 16,
+    color: "#267D73",
+    marginRight: 8,
+    lineHeight: 21,
+  },
+  
+  listText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#30484C",
+    lineHeight: 21,
   },
 
   label: {
-    fontSize: 14,
+    fontSize: 12,
+    color: "#718387",
     marginBottom: 4,
   },
 
   value: {
-    fontSize: 16,
-    fontWeight: "500",
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#30484C",
+    lineHeight: 21,
+  },
+
+  description: {
+    fontSize: 14,
+    color: "#30484C",
+    lineHeight: 22,
   },
 
   // ===================================================
-  // SERVICES
+  // BUTTONS
   // ===================================================
 
-  services: {
-    fontSize: 16,
-    lineHeight: 24,
+  actionButton: {
+    backgroundColor: "#267D73",
+    borderRadius: 11,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+
+  actionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  emergencyButton: {
+    backgroundColor: "#C0392B",
+    borderRadius: 11,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 9,
+  },
+
+  emergencyButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
 
   // ===================================================
-  // COST
+  // COMING SOON
   // ===================================================
 
-  cost: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 5,
-  },
-
-  // ===================================================
-  // QUALITY
-  // ===================================================
-
-  quality: {
-    fontSize: 24,
-    fontWeight: "bold",
+  comingSoon: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#267D73",
     marginBottom: 5,
   },
 
   note: {
-    fontSize: 13,
-  },
-
-  // ===================================================
-  // SCORE BREAKDOWN
-  // ===================================================
-
-  scoreRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-    paddingVertical: 5,
-  },
-
-  scoreLabel: {
-    fontSize: 15,
-  },
-
-  scoreValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-
-  weightsBox: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 10,
-  },
-
-  weightsTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-
-  weightText: {
-    fontSize: 14,
-    marginBottom: 5,
-  },
-
-  // ===================================================
-  // MAP
-  // ===================================================
-
-  mapSection: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 15,
+    fontSize: 12,
+    color: "#718387",
+    lineHeight: 18,
   },
 
   // ===================================================
@@ -586,21 +693,24 @@ const styles = StyleSheet.create({
   // ===================================================
 
   futureBox: {
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 5,
+    borderColor: "#E2EBE9",
+    borderRadius: 16,
+    padding: 17,
+    marginTop: 3,
   },
 
   futureTitle: {
-    fontSize: 19,
-    fontWeight: "bold",
-    marginBottom: 10,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#173B3A",
+    marginBottom: 11,
   },
 
   futureText: {
-    fontSize: 15,
-    marginBottom: 6,
+    fontSize: 13,
+    color: "#718387",
+    marginBottom: 7,
   },
-
 });

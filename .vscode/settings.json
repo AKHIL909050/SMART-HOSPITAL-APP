@@ -3,5 +3,6 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
-  }
+  },
+  "cmake.sourceDirectory": "C:/Users/Akhil Goud/Documents/final year project/SMART-HOSPITAL-APP/node_modules/react-native-reanimated/android"
 }

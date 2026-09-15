@@ -1,8 +1,20 @@
+import {
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from "expo-audio";
+
+import { File } from "expo-file-system";
+
 import * as Location from "expo-location";
 import { router } from "expo-router";
+
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+
 import { useEffect, useState } from "react";
+
 import {
   Alert,
   Pressable,
@@ -10,56 +22,27 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
+
 import { auth, db } from "../../firebase/config";
 
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
+
 
 const API_URL = "http://192.168.1.245:8000";
 
+
 export default function HomeScreen() {
+
   // ==================================================
   // STATE
   // ==================================================
+
   const [userName, setUserName] = useState("User");
-  useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    console.log("AUTH USER:", user);
-
-    if (!user) {
-      console.log("NO USER LOGGED IN");
-      setUserName("User");
-      return;
-    }
-
-    console.log("USER UID:", user.uid);
-
-    try {
-      const userDoc = await getDoc(
-        doc(db, "users", user.uid)
-      );
-
-      console.log("DOCUMENT EXISTS:", userDoc.exists());
-
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-
-        console.log("FIRESTORE DATA:", userData);
-        console.log("NAME:", userData.name);
-
-        setUserName(userData.name || "User");
-      } else {
-        console.log("NO FIRESTORE DOCUMENT FOUND");
-        setUserName("User");
-      }
-    } catch (error) {
-      console.log("FIRESTORE ERROR:", error);
-    }
-  });
-
-  return unsubscribe;
-}, []);
 
   const [location, setLocation] =
     useState<Location.LocationObject | null>(null);
@@ -76,275 +59,698 @@ export default function HomeScreen() {
   const [searchResults, setSearchResults] =
     useState<any[]>([]);
 
-  const [searchLoading, setSearchLoading] =
-    useState(false);
-
   const [recommendations, setRecommendations] =
     useState<any[]>([]);
 
   const [recommendationLoading, setRecommendationLoading] =
     useState(false);
 
+  const [isListening, setIsListening] =
+    useState(false);
+
+  const [spokenText, setSpokenText] =
+    useState("");
+
+
+  // ==================================================
+  // AUDIO RECORDER
+  // ==================================================
+
+  const audioRecorder =
+    useAudioRecorder(
+      RecordingPresets.HIGH_QUALITY
+    );
+
+  const recorderState =
+    useAudioRecorderState(audioRecorder);
+
+
+  // ==================================================
+  // FIREBASE USER
+  // ==================================================
+
+  useEffect(() => {
+
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        async (user) => {
+
+          console.log("AUTH USER:", user);
+
+          if (!user) {
+
+            console.log(
+              "NO USER LOGGED IN"
+            );
+
+            setUserName("User");
+
+            return;
+          }
+
+          console.log(
+            "USER UID:",
+            user.uid
+          );
+
+          try {
+
+            const userDoc =
+              await getDoc(
+                doc(
+                  db,
+                  "users",
+                  user.uid
+                )
+              );
+
+            console.log(
+              "DOCUMENT EXISTS:",
+              userDoc.exists()
+            );
+
+            if (userDoc.exists()) {
+
+              const userData =
+                userDoc.data();
+
+              console.log(
+                "FIRESTORE DATA:",
+                userData
+              );
+
+              console.log(
+                "NAME:",
+                userData.name
+              );
+
+              setUserName(
+                userData.name || "User"
+              );
+
+            } else {
+
+              console.log(
+                "NO FIRESTORE DOCUMENT FOUND"
+              );
+
+              setUserName("User");
+            }
+
+          } catch (error) {
+
+            console.log(
+              "FIRESTORE ERROR:",
+              error
+            );
+
+          }
+        }
+      );
+
+    return unsubscribe;
+
+  }, []);
+
 
   // ==================================================
   // FIND NEARBY HOSPITALS
   // ==================================================
 
-  const findHospitals = async () => {
-    setLoading(true);
+  const findHospitals =
+    async () => {
 
-    try {
-      const { status } =
-        await Location.requestForegroundPermissionsAsync();
+      setLoading(true);
 
-      if (status !== "granted") {
-        Alert.alert(
-          "Location Permission",
-          "Please allow location access to find nearby hospitals."
+      try {
+
+        const {
+          status,
+        } =
+          await Location.requestForegroundPermissionsAsync();
+
+        if (status !== "granted") {
+
+          Alert.alert(
+            "Location Permission",
+            "Please allow location access to find nearby hospitals."
+          );
+
+          setLoading(false);
+
+          return;
+        }
+
+
+        const currentLocation =
+          await Location.getCurrentPositionAsync({
+            accuracy:
+              Location.Accuracy.High,
+          });
+
+
+        setLocation(
+          currentLocation
         );
 
+
+        const latitude =
+          currentLocation.coords.latitude;
+
+        const longitude =
+          currentLocation.coords.longitude;
+
+
+        const response =
+          await fetch(
+            `${API_URL}/hospitals/nearby?latitude=${latitude}&longitude=${longitude}`
+          );
+
+
+        if (!response.ok) {
+
+          throw new Error(
+            "Server error"
+          );
+        }
+
+
+        const data =
+          await response.json();
+
+
+        setHospitals(
+          data.hospitals || []
+        );
+
+
+      } catch (error) {
+
+        console.log(
+          "FIND HOSPITALS ERROR:",
+          error
+        );
+
+
+        Alert.alert(
+          "Connection Error",
+          "Could not connect to the hospital server."
+        );
+
+
+      } finally {
+
         setLoading(false);
+
+      }
+    };
+
+
+  // ==================================================
+  // NORMAL SEARCH
+  // ==================================================
+
+  const searchHospitals =
+    () => {
+
+      if (!service.trim()) {
+
+        Alert.alert(
+          "Search",
+          "Please enter a treatment or hospital service."
+        );
+
         return;
       }
 
-      const currentLocation =
-        await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
 
-      setLocation(currentLocation);
+      router.push({
+        pathname: "/result",
+        params: {
+          search: service.trim(),
+        },
+      });
 
-      const latitude =
-        currentLocation.coords.latitude;
-
-      const longitude =
-        currentLocation.coords.longitude;
-
-      const response = await fetch(
-        `${API_URL}/hospitals/nearby?latitude=${latitude}&longitude=${longitude}`
-      );
-
-      if (!response.ok) {
-        throw new Error("Server error");
-      }
-
-      const data = await response.json();
-
-      setHospitals(data.hospitals);
-
-    } catch (error) {
-      console.log(error);
-
-      Alert.alert(
-        "Connection Error",
-        "Could not connect to the hospital server."
-      );
-
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const searchHospitals = () => {
-    if (!service.trim()) {
-      Alert.alert(
-        "Search",
-        "Please enter a treatment or hospital service."
-      );
-      return;
-    }
-  
-    router.push({
-      pathname: "/result",
-      params: {
-        search: service.trim(),
-      },
-    });
-  };
-  // ==================================================
-  // SEARCH HOSPITALS
-  // ==================================================
-
+    };
 
 
   // ==================================================
   // RECOMMEND BEST HOSPITAL
   // ==================================================
 
-  const getRecommendations = async () => {
-    if (!service.trim()) {
-      Alert.alert(
-        "Enter Treatment",
-        "Please enter a treatment first."
-      );
+  const getRecommendations =
+    async () => {
 
-      return;
-    }
+      if (!service.trim()) {
 
-    if (!location) {
-      Alert.alert(
-        "Location Required",
-        "Please find hospitals near you first."
-      );
-
-      return;
-    }
-
-    setRecommendationLoading(true);
-
-    try {
-      const latitude =
-        location.coords.latitude;
-
-      const longitude =
-        location.coords.longitude;
-
-      const response = await fetch(
-        `${API_URL}/hospitals/recommend?latitude=${latitude}&longitude=${longitude}&service=${encodeURIComponent(
-          service.trim()
-        )}`
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          "Recommendation request failed"
-        );
-      }
-
-      const data = await response.json();
-
-      setRecommendations(data.hospitals);
-
-      if (data.hospitals.length === 0) {
         Alert.alert(
-          "No Hospitals Found",
-          `No hospitals provide ${service}.`
+          "Enter Treatment",
+          "Please enter a treatment first."
         );
+
+        return;
       }
 
-    } catch (error) {
-      console.log(error);
 
-      Alert.alert(
-        "Recommendation Error",
-        "Could not get hospital recommendations."
-      );
+      if (!location) {
 
-    } finally {
-      setRecommendationLoading(false);
-    }
-  };
+        Alert.alert(
+          "Location Required",
+          "Please find hospitals near you first."
+        );
+
+        return;
+      }
+
+
+      setRecommendationLoading(true);
+
+
+      try {
+
+        const latitude =
+          location.coords.latitude;
+
+        const longitude =
+          location.coords.longitude;
+
+
+        const response =
+          await fetch(
+            `${API_URL}/hospitals/recommend?latitude=${latitude}&longitude=${longitude}&service=${encodeURIComponent(
+              service.trim()
+            )}`
+          );
+
+
+        if (!response.ok) {
+
+          throw new Error(
+            "Recommendation request failed"
+          );
+        }
+
+
+        const data =
+          await response.json();
+
+
+        setRecommendations(
+          data.hospitals || []
+        );
+
+
+        if (
+          !data.hospitals ||
+          data.hospitals.length === 0
+        ) {
+
+          Alert.alert(
+            "No Hospitals Found",
+            `No hospitals provide ${service}.`
+          );
+
+        }
+
+
+      } catch (error) {
+
+        console.log(
+          "RECOMMENDATION ERROR:",
+          error
+        );
+
+
+        Alert.alert(
+          "Recommendation Error",
+          "Could not get hospital recommendations."
+        );
+
+
+      } finally {
+
+        setRecommendationLoading(
+          false
+        );
+
+      }
+    };
 
 
   // ==================================================
   // CLEAR SEARCH
   // ==================================================
 
-  const clearSearch = () => {
-    setService("");
-    setSearchResults([]);
-    setRecommendations([]);
-  };
+  const clearSearch =
+    () => {
+
+      setService("");
+
+      setSearchResults([]);
+
+      setRecommendations([]);
+
+    };
 
 
   // ==================================================
   // OPEN HOSPITAL DETAILS
   // ==================================================
 
-  const openHospitalDetails = (hospital: any) => {
-    router.push({
-      pathname: "/details",
+  const openHospitalDetails =
+    (hospital: any) => {
 
-      params: {
-        name: hospital.name,
-        city: hospital.city,
-        state: hospital.state,
+      try {
 
-        distance:
-          hospital.distance_km !== undefined
-            ? hospital.distance_km.toString()
-            : "Not calculated",
+        router.push({
+          pathname: "/details",
+          params: {
+            hospital: JSON.stringify(
+              hospital
+            ),
+          },
+        });
 
-        latitude:
-          hospital.latitude.toString(),
+      } catch (error) {
 
-        longitude:
-          hospital.longitude.toString(),
+        console.log(
+          "DETAILS NAVIGATION ERROR:",
+          error
+        );
 
-        treatment_cost:
-          hospital.treatment_cost !== undefined
-            ? hospital.treatment_cost.toString()
-            : "Not available",
-
-        quality_score:
-          hospital.quality_score !== undefined
-            ? hospital.quality_score.toString()
-            : "Not available",
-
-        recommendation_score:
-          hospital.recommendation_score !== undefined
-            ? hospital.recommendation_score.toString()
-            : "Not available",
-
-        services:
-          hospital.services
-            ? hospital.services.join(", ")
-            : "Not available",
-      },
-    });
-  };
+      }
+    };
 
 
   // ==================================================
-  // VOICE BUTTON
+  // START VOICE RECORDING
   // ==================================================
 
-  const openVoiceAssistant = () => {
-    Alert.alert(
-      "Voice Assistant",
-      "Voice search will be connected here."
-    );
-  };
+  const openVoiceAssistant =
+    async () => {
+
+      try {
+
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+        });
+
+
+        await audioRecorder.prepareToRecordAsync();
+
+
+        audioRecorder.record();
+
+
+        setSpokenText("");
+
+        setIsListening(true);
+
+
+        console.log(
+          "VOICE RECORDING STARTED"
+        );
+
+
+      } catch (error) {
+
+        console.log(
+          "VOICE RECORDING ERROR:",
+          error
+        );
+
+
+        setIsListening(false);
+
+
+        Alert.alert(
+          "Voice Search",
+          "Could not start recording."
+        );
+
+      }
+    };
+
+
+  // ==================================================
+  // STOP RECORDING + UPLOAD TO FASTAPI
+  // ==================================================
+
+  const stopVoiceAssistant =
+    async () => {
+
+      try {
+
+        await audioRecorder.stop();
+
+
+        setIsListening(false);
+
+
+        const uri =
+          audioRecorder.uri;
+
+
+        console.log(
+          "RECORDED AUDIO URI:",
+          uri
+        );
+
+
+        if (!uri) {
+
+          Alert.alert(
+            "Voice Search",
+            "No audio was recorded."
+          );
+
+          return;
+        }
+
+
+        // --------------------------------------------
+        // Create Expo File object
+        // --------------------------------------------
+
+        const audioFile =
+          new File(uri);
+
+
+        console.log(
+          "AUDIO FILE URI:",
+          audioFile.uri
+        );
+
+        console.log(
+          "AUDIO FILE TYPE:",
+          audioFile.type
+        );
+
+        console.log(
+          "AUDIO FILE SIZE:",
+          audioFile.size
+        );
+
+
+        // --------------------------------------------
+        // Upload directly using Expo FileSystem
+        // --------------------------------------------
+
+        console.log(
+          "UPLOADING AUDIO..."
+        );
+
+
+        const uploadResult =
+          await audioFile.upload(
+            `${API_URL}/transcribe`,
+            {
+              httpMethod: "POST",
+
+              uploadType: 1,
+
+              fieldName: "file",
+
+              mimeType: "audio/m4a",
+            }
+          );
+
+
+        console.log(
+          "TRANSCRIBE STATUS:",
+          uploadResult.status
+        );
+
+
+        console.log(
+          "TRANSCRIBE BODY:",
+          uploadResult.body
+        );
+
+
+        if (
+          uploadResult.status < 200 ||
+          uploadResult.status >= 300
+        ) {
+
+          throw new Error(
+            `Transcription failed with status ${uploadResult.status}`
+          );
+
+        }
+
+
+        // --------------------------------------------
+        // Parse FastAPI response
+        // --------------------------------------------
+
+        let data: any;
+
+
+        if (
+          typeof uploadResult.body ===
+          "string"
+        ) {
+
+          data =
+            JSON.parse(
+              uploadResult.body
+            );
+
+        } else {
+
+          data =
+            uploadResult.body;
+
+        }
+
+
+        console.log(
+          "TRANSCRIPTION:",
+          data
+        );
+
+
+        const text =
+          data?.text?.trim();
+
+
+        if (!text) {
+
+          Alert.alert(
+            "Voice Search",
+            "I could not understand the recorded speech."
+          );
+
+          return;
+        }
+
+
+        // --------------------------------------------
+        // Put transcription into search box
+        // --------------------------------------------
+
+        setSpokenText(text);
+
+        setService(text);
+
+
+        console.log(
+          "VOICE TEXT:",
+          text
+        );
+
+
+        // --------------------------------------------
+        // Go to Result page
+        // --------------------------------------------
+
+        router.push({
+          pathname: "/result",
+          params: {
+            search: text,
+          },
+        });
+
+
+      } catch (error) {
+
+        console.log(
+          "VOICE STOP ERROR:",
+          error
+        );
+
+
+        setIsListening(false);
+
+
+        Alert.alert(
+          "Voice Search",
+          "Could not process your voice."
+        );
+
+      }
+    };
 
 
   // ==================================================
   // QUICK TREATMENTS
   // ==================================================
 
-  const selectTreatment = (treatment: string) => {
-    setService(treatment);
-  };
+  const selectTreatment =
+    (treatment: string) => {
 
-  const selectEmergency = (emergencyType: string) => {
-    router.push({
-      pathname: "/nearby",
-      params: {
-        emergencyType,
-      },
-    });
-  }; 
+      setService(
+        treatment
+      );
 
- 
-  const searchHospitalsByEmergency = (emergency: string) => {
-    router.push({
-      pathname: "/result",
-      params: {
-        search: emergency,
-      },
-    });
-  };
-  
-    
+    };
+
+
+  // ==================================================
+  // EMERGENCY
+  // ==================================================
+
+  const selectEmergency =
+    (emergencyType: string) => {
+
+      router.push({
+        pathname: "/nearby",
+        params: {
+          emergencyType,
+        },
+      });
+
+    };
+
+
+  const searchHospitalsByEmergency =
+    (emergency: string) => {
+
+      router.push({
+        pathname: "/result",
+        params: {
+          search: emergency,
+        },
+      });
+
+    };
+
 
   // ==================================================
   // UI
   // ==================================================
 
   return (
+
     <View style={styles.screen}>
 
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={
+          styles.container
+        }
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -356,6 +762,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
 
           <View>
+
             <Text style={styles.goodMorning}>
               Good Morning,
             </Text>
@@ -365,6 +772,7 @@ export default function HomeScreen() {
             </Text>
 
             <View style={styles.locationRow}>
+
               <Ionicons
                 name="location"
                 size={15}
@@ -374,25 +782,37 @@ export default function HomeScreen() {
               <Text style={styles.locationName}>
                 Hyderabad, Telangana
               </Text>
+
             </View>
+
           </View>
+
 
           <View style={styles.headerIcons}>
 
-            <Pressable style={styles.iconButton}>
+            <Pressable
+              style={styles.iconButton}
+            >
+
               <Ionicons
                 name="notifications-outline"
                 size={23}
                 color="#173B42"
               />
+
             </Pressable>
 
-            <Pressable style={styles.profileCircle}>
+
+            <Pressable
+              style={styles.profileCircle}
+            >
+
               <Ionicons
                 name="person"
                 size={22}
                 color="#267D73"
               />
+
             </Pressable>
 
           </View>
@@ -404,42 +824,60 @@ export default function HomeScreen() {
             SEARCH BAR
         ========================================== */}
 
-  <View style={styles.searchBar}>
-  <Pressable
-    onPress={() => {
-      console.log("SEARCH BUTTON PRESSED");
-      searchHospitals();
-    }}
-  >
-  <Pressable onPress={searchHospitals}>
-    <Ionicons
-      name="search"
-      size={20}
-      color="#718387"
-    />
-  </Pressable>
-  </Pressable>
-          
-    <TextInput
-      style={styles.searchInput}
-      placeholder="Search hospitals, treatments..."
-      value={service}
-      onChangeText={setService}
-      autoCapitalize="words"
-      returnKeyType="search"
-      onSubmitEditing={searchHospitals}
-    />
+        <View style={styles.searchBar}>
 
           <Pressable
-            onPress={openVoiceAssistant}
-            style={styles.voiceButton}
+            onPress={searchHospitals}
           >
+
             <Ionicons
-              name="mic-outline"
-              size={21}
-              color="#267D73"
+              name="search"
+              size={20}
+              color="#718387"
             />
+
           </Pressable>
+
+
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search hospitals, treatments..."
+            placeholderTextColor="#8A9A9D"
+            value={service}
+            onChangeText={setService}
+            autoCapitalize="words"
+            returnKeyType="search"
+            onSubmitEditing={
+              searchHospitals
+            }
+          />
+
+
+          <Pressable
+            style={styles.voiceButton}
+            onPress={
+              isListening
+                ? stopVoiceAssistant
+                : openVoiceAssistant
+            }
+          >
+
+            <Ionicons
+              name={
+                isListening
+                  ? "mic"
+                  : "mic-outline"
+              }
+              size={21}
+              color={
+                isListening
+                  ? "#D95757"
+                  : "#267D73"
+              }
+            />
+
+          </Pressable>
+
 
           <Ionicons
             name="options-outline"
@@ -472,7 +910,13 @@ export default function HomeScreen() {
 
           </View>
 
-          <View style={styles.bannerImageContainer}>
+
+          <View
+            style={
+              styles.bannerImageContainer
+            }
+          >
+
             <MaterialCommunityIcons
               name="hospital-building"
               size={75}
@@ -485,6 +929,7 @@ export default function HomeScreen() {
               color="#FFFFFF"
               style={styles.medicalIcon}
             />
+
           </View>
 
         </View>
@@ -496,8 +941,6 @@ export default function HomeScreen() {
 
         <View style={styles.quickGrid}>
 
-          {/* FIND NEARBY */}
-
           <Pressable
             style={[
               styles.quickCard,
@@ -506,12 +949,16 @@ export default function HomeScreen() {
             onPress={findHospitals}
           >
 
-            <View style={styles.quickIconBlue}>
+            <View
+              style={styles.quickIconBlue}
+            >
+
               <Ionicons
                 name="location"
                 size={23}
                 color="#2875D4"
               />
+
             </View>
 
             <Text style={styles.quickTitle}>
@@ -527,8 +974,6 @@ export default function HomeScreen() {
           </Pressable>
 
 
-          {/* SEARCH TREATMENT */}
-
           <Pressable
             style={[
               styles.quickCard,
@@ -537,12 +982,16 @@ export default function HomeScreen() {
             onPress={searchHospitals}
           >
 
-            <View style={styles.quickIconGreen}>
+            <View
+              style={styles.quickIconGreen}
+            >
+
               <Ionicons
                 name="medical"
                 size={22}
                 color="#279B79"
               />
+
             </View>
 
             <Text style={styles.quickTitle}>
@@ -556,8 +1005,6 @@ export default function HomeScreen() {
           </Pressable>
 
 
-          {/* COMPARE */}
-
           <Pressable
             style={[
               styles.quickCard,
@@ -565,12 +1012,16 @@ export default function HomeScreen() {
             ]}
           >
 
-            <View style={styles.quickIconPurple}>
+            <View
+              style={styles.quickIconPurple}
+            >
+
               <Ionicons
                 name="git-compare-outline"
                 size={22}
                 color="#8B57B5"
               />
+
             </View>
 
             <Text style={styles.quickTitle}>
@@ -584,8 +1035,6 @@ export default function HomeScreen() {
           </Pressable>
 
 
-          {/* SAVED */}
-
           <Pressable
             style={[
               styles.quickCard,
@@ -593,12 +1042,16 @@ export default function HomeScreen() {
             ]}
           >
 
-            <View style={styles.quickIconYellow}>
+            <View
+              style={styles.quickIconYellow}
+            >
+
               <Ionicons
                 name="bookmark-outline"
                 size={22}
                 color="#A77A17"
               />
+
             </View>
 
             <Text style={styles.quickTitle}>
@@ -615,7 +1068,7 @@ export default function HomeScreen() {
 
 
         {/* ==========================================
-            Emergency Care
+            EMERGENCY CARE
         ========================================== */}
 
         <View style={styles.sectionHeader}>
@@ -625,124 +1078,203 @@ export default function HomeScreen() {
           </Text>
 
           <Pressable>
+
             <Text style={styles.viewAll}>
               View All
             </Text>
+
           </Pressable>
 
         </View>
+
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.treatmentRow}
+          contentContainerStyle={
+            styles.treatmentRow
+          }
         >
+
           {/* ACCIDENT */}
+
           <Pressable
             style={styles.treatmentItem}
-            onPress={() => searchHospitalsByEmergency("Accident / Trauma")}
+            onPress={() =>
+              searchHospitalsByEmergency(
+                "Accident / Trauma"
+              )
+            }
           >
-            <View style={styles.treatmentIconRed}>
+
+            <View
+              style={styles.treatmentIconRed}
+            >
+
               <MaterialCommunityIcons
                 name="car-emergency"
                 size={21}
                 color="#D95757"
               />
+
             </View>
 
             <Text style={styles.treatmentName}>
               Accident
             </Text>
+
           </Pressable>
 
+
           {/* HEART ATTACK */}
+
           <Pressable
             style={styles.treatmentItem}
-            onPress={() => searchHospitalsByEmergency("Heart Attack")}
+            onPress={() =>
+              searchHospitalsByEmergency(
+                "Heart Attack"
+              )
+            }
           >
-            <View style={styles.treatmentIconRed}>
+
+            <View
+              style={styles.treatmentIconRed}
+            >
+
               <Ionicons
                 name="heart"
                 size={20}
                 color="#D95757"
               />
+
             </View>
 
             <Text style={styles.treatmentName}>
               Heart Attack
             </Text>
+
           </Pressable>
 
+
           {/* SEIZURE */}
+
           <Pressable
             style={styles.treatmentItem}
-            onPress={() => searchHospitalsByEmergency("Seizure")}
+            onPress={() =>
+              searchHospitalsByEmergency(
+                "Seizure"
+              )
+            }
           >
-            <View style={styles.treatmentIconPurple}>
+
+            <View
+              style={styles.treatmentIconPurple}
+            >
+
               <MaterialCommunityIcons
                 name="brain"
                 size={20}
                 color="#8554B4"
               />
+
             </View>
 
             <Text style={styles.treatmentName}>
               Fits / Seizure
             </Text>
+
           </Pressable>
 
+
           {/* BLEEDING */}
+
           <Pressable
             style={styles.treatmentItem}
-            onPress={() => searchHospitalsByEmergency("Severe Bleeding")}
+            onPress={() =>
+              searchHospitalsByEmergency(
+                "Severe Bleeding"
+              )
+            }
           >
-            <View style={styles.treatmentIconRed}>
+
+            <View
+              style={styles.treatmentIconRed}
+            >
+
               <Ionicons
                 name="water"
                 size={20}
                 color="#D95757"
               />
+
             </View>
 
             <Text style={styles.treatmentName}>
               Severe Bleeding
             </Text>
+
           </Pressable>
 
+
           {/* BREATHING */}
+
           <Pressable
             style={styles.treatmentItem}
-            onPress={() => searchHospitalsByEmergency("Breathing Emergency")}
+            onPress={() =>
+              searchHospitalsByEmergency(
+                "Breathing Emergency"
+              )
+            }
           >
-            <View style={styles.treatmentIconBlue}>
+
+            <View
+              style={styles.treatmentIconBlue}
+            >
+
               <Ionicons
                 name="medical"
                 size={20}
                 color="#2875D4"
               />
+
             </View>
 
             <Text style={styles.treatmentName}>
               Breathing
             </Text>
+
           </Pressable>
 
+
           {/* BURNS */}
+
           <Pressable
             style={styles.treatmentItem}
-            onPress={() => searchHospitalsByEmergency("Burns")}
+            onPress={() =>
+              searchHospitalsByEmergency(
+                "Burns"
+              )
+            }
           >
-            <View style={styles.treatmentIconYellow}>
+
+            <View
+              style={styles.treatmentIconYellow}
+            >
+
               <MaterialCommunityIcons
                 name="fire"
                 size={20}
                 color="#C18A18"
               />
+
             </View>
 
             <Text style={styles.treatmentName}>
               Burns
             </Text>
+
           </Pressable>
+
         </ScrollView>
 
 
@@ -751,10 +1283,17 @@ export default function HomeScreen() {
         ========================================== */}
 
         {service.trim().length > 0 && (
+
           <Pressable
-            style={styles.recommendButton}
-            onPress={getRecommendations}
-            disabled={recommendationLoading}
+            style={
+              styles.recommendButton
+            }
+            onPress={
+              getRecommendations
+            }
+            disabled={
+              recommendationLoading
+            }
           >
 
             <Ionicons
@@ -763,13 +1302,20 @@ export default function HomeScreen() {
               color="#FFFFFF"
             />
 
-            <Text style={styles.recommendButtonText}>
+            <Text
+              style={
+                styles.recommendButtonText
+              }
+            >
+
               {recommendationLoading
                 ? "Finding Best Hospital..."
                 : "Find Best Hospital"}
+
             </Text>
 
           </Pressable>
+
         )}
 
 
@@ -779,20 +1325,36 @@ export default function HomeScreen() {
 
         {recommendations.length > 0 && (
 
-          <View style={styles.resultsSection}>
+          <View
+            style={
+              styles.resultsSection
+            }
+          >
 
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
+            <View
+              style={
+                styles.sectionHeader
+              }
+            >
+
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
                 Recommended for You
               </Text>
+
             </View>
+
 
             {recommendations.map(
               (hospital, index) => (
 
                 <Pressable
                   key={
-                    hospital.id ?? index
+                    hospital.id ??
+                    index
                   }
                   style={[
                     styles.hospitalCard,
@@ -807,38 +1369,73 @@ export default function HomeScreen() {
                 >
 
                   {index === 0 && (
-                    <View style={styles.bestBadge}>
-                      <Text style={styles.bestBadgeText}>
+
+                    <View
+                      style={
+                        styles.bestBadge
+                      }
+                    >
+
+                      <Text
+                        style={
+                          styles.bestBadgeText
+                        }
+                      >
                         BEST MATCH
                       </Text>
+
                     </View>
+
                   )}
 
-                  <View style={styles.hospitalTopRow}>
 
-                    <View style={styles.hospitalIcon}>
+                  <View
+                    style={
+                      styles.hospitalTopRow
+                    }
+                  >
+
+                    <View
+                      style={
+                        styles.hospitalIcon
+                      }
+                    >
+
                       <Ionicons
                         name="medical"
                         size={24}
                         color="#267D73"
                       />
+
                     </View>
 
-                    <View style={styles.hospitalTitleArea}>
+
+                    <View
+                      style={
+                        styles.hospitalTitleArea
+                      }
+                    >
 
                       <Text
-                        style={styles.hospitalName}
+                        style={
+                          styles.hospitalName
+                        }
                         numberOfLines={2}
                       >
                         {hospital.name}
                       </Text>
 
-                      <Text style={styles.hospitalLocation}>
+                      <Text
+                        style={
+                          styles.hospitalLocation
+                        }
+                      >
                         {hospital.city},{" "}
                         {hospital.state}
                       </Text>
 
                     </View>
+
 
                     <Ionicons
                       name="chevron-forward"
@@ -849,58 +1446,108 @@ export default function HomeScreen() {
                   </View>
 
 
-                  <View style={styles.infoRow}>
+                  <View
+                    style={styles.infoRow}
+                  >
 
                     <View>
-                      <Text style={styles.infoLabel}>
+
+                      <Text
+                        style={
+                          styles.infoLabel
+                        }
+                      >
                         Distance
                       </Text>
 
-                      <Text style={styles.infoValue}>
+                      <Text
+                        style={
+                          styles.infoValue
+                        }
+                      >
                         {hospital.distance_km} km
                       </Text>
+
                     </View>
 
+
                     <View>
-                      <Text style={styles.infoLabel}>
+
+                      <Text
+                        style={
+                          styles.infoLabel
+                        }
+                      >
                         Cost
                       </Text>
 
-                      <Text style={styles.infoValue}>
+                      <Text
+                        style={
+                          styles.infoValue
+                        }
+                      >
                         ₹{hospital.treatment_cost}
                       </Text>
+
                     </View>
 
+
                     <View>
-                      <Text style={styles.infoLabel}>
+
+                      <Text
+                        style={
+                          styles.infoLabel
+                        }
+                      >
                         Quality
                       </Text>
 
-                      <Text style={styles.infoValue}>
+                      <Text
+                        style={
+                          styles.infoValue
+                        }
+                      >
                         ⭐ {hospital.quality_score}/5
                       </Text>
+
                     </View>
 
                   </View>
 
 
-                  <View style={styles.scoreRow}>
+                  <View
+                    style={
+                      styles.scoreRow
+                    }
+                  >
 
-                    <Text style={styles.scoreLabel}>
+                    <Text
+                      style={
+                        styles.scoreLabel
+                      }
+                    >
                       Recommendation Score
                     </Text>
 
-                    <Text style={styles.scoreValue}>
-                      {hospital.recommendation_score}/100
+                    <Text
+                      style={
+                        styles.scoreValue
+                      }
+                    >
+                      {
+                        hospital.recommendation_score
+                      }/100
                     </Text>
 
                   </View>
 
                 </Pressable>
+
               )
             )}
 
           </View>
+
         )}
 
 
@@ -910,15 +1557,31 @@ export default function HomeScreen() {
 
         {searchResults.length > 0 && (
 
-          <View style={styles.resultsSection}>
+          <View
+            style={
+              styles.resultsSection
+            }
+          >
 
-            <View style={styles.sectionHeader}>
+            <View
+              style={
+                styles.sectionHeader
+              }
+            >
 
-              <Text style={styles.sectionTitle}>
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
                 Hospitals for {service}
               </Text>
 
-              <Text style={styles.resultCount}>
+              <Text
+                style={
+                  styles.resultCount
+                }
+              >
                 {searchResults.length}
               </Text>
 
@@ -930,9 +1593,12 @@ export default function HomeScreen() {
 
                 <Pressable
                   key={
-                    hospital.id ?? index
+                    hospital.id ??
+                    index
                   }
-                  style={styles.hospitalCard}
+                  style={
+                    styles.hospitalCard
+                  }
                   onPress={() =>
                     openHospitalDetails(
                       hospital
@@ -940,31 +1606,53 @@ export default function HomeScreen() {
                   }
                 >
 
-                  <View style={styles.hospitalTopRow}>
+                  <View
+                    style={
+                      styles.hospitalTopRow
+                    }
+                  >
 
-                    <View style={styles.hospitalIcon}>
+                    <View
+                      style={
+                        styles.hospitalIcon
+                      }
+                    >
+
                       <Ionicons
                         name="medical"
                         size={24}
                         color="#267D73"
                       />
+
                     </View>
 
-                    <View style={styles.hospitalTitleArea}>
+
+                    <View
+                      style={
+                        styles.hospitalTitleArea
+                      }
+                    >
 
                       <Text
-                        style={styles.hospitalName}
+                        style={
+                          styles.hospitalName
+                        }
                         numberOfLines={2}
                       >
                         {hospital.name}
                       </Text>
 
-                      <Text style={styles.hospitalLocation}>
+                      <Text
+                        style={
+                          styles.hospitalLocation
+                        }
+                      >
                         {hospital.city},{" "}
                         {hospital.state}
                       </Text>
 
                     </View>
+
 
                     <Ionicons
                       name="chevron-forward"
@@ -980,6 +1668,7 @@ export default function HomeScreen() {
             )}
 
           </View>
+
         )}
 
 
@@ -989,11 +1678,23 @@ export default function HomeScreen() {
 
         {hospitals.length > 0 && (
 
-          <View style={styles.resultsSection}>
+          <View
+            style={
+              styles.resultsSection
+            }
+          >
 
-            <View style={styles.sectionHeader}>
+            <View
+              style={
+                styles.sectionHeader
+              }
+            >
 
-              <Text style={styles.sectionTitle}>
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
                 Hospitals Near You
               </Text>
 
@@ -1005,9 +1706,12 @@ export default function HomeScreen() {
 
                 <Pressable
                   key={
-                    hospital.id ?? index
+                    hospital.id ??
+                    index
                   }
-                  style={styles.hospitalCard}
+                  style={
+                    styles.hospitalCard
+                  }
                   onPress={() =>
                     openHospitalDetails(
                       hospital
@@ -1015,33 +1719,59 @@ export default function HomeScreen() {
                   }
                 >
 
-                  <View style={styles.hospitalTopRow}>
+                  <View
+                    style={
+                      styles.hospitalTopRow
+                    }
+                  >
 
-                    <View style={styles.hospitalIcon}>
+                    <View
+                      style={
+                        styles.hospitalIcon
+                      }
+                    >
+
                       <Ionicons
                         name="location"
                         size={24}
                         color="#2875D4"
                       />
+
                     </View>
 
-                    <View style={styles.hospitalTitleArea}>
+
+                    <View
+                      style={
+                        styles.hospitalTitleArea
+                      }
+                    >
 
                       <Text
-                        style={styles.hospitalName}
+                        style={
+                          styles.hospitalName
+                        }
                         numberOfLines={2}
                       >
                         {hospital.name}
                       </Text>
 
-                      <Text style={styles.hospitalLocation}>
+                      <Text
+                        style={
+                          styles.hospitalLocation
+                        }
+                      >
                         {hospital.city},{" "}
                         {hospital.state}
                       </Text>
 
                     </View>
 
-                    <Text style={styles.nearDistance}>
+
+                    <Text
+                      style={
+                        styles.nearDistance
+                      }
+                    >
                       {hospital.distance_km} km
                     </Text>
 
@@ -1053,20 +1783,31 @@ export default function HomeScreen() {
             )}
 
           </View>
+
         )}
 
 
-        {/* CLEAR */}
+        {/* ==========================================
+            CLEAR
+        ========================================== */}
 
         {(searchResults.length > 0 ||
           recommendations.length > 0) && (
 
           <Pressable
-            style={styles.clearButton}
-            onPress={clearSearch}
+            style={
+              styles.clearButton
+            }
+            onPress={
+              clearSearch
+            }
           >
 
-            <Text style={styles.clearText}>
+            <Text
+              style={
+                styles.clearText
+              }
+            >
               Clear Search
             </Text>
 
@@ -1075,7 +1816,9 @@ export default function HomeScreen() {
         )}
 
       </ScrollView>
-     </View>
+
+    </View>
+
   );
 }
 
@@ -1084,522 +1827,515 @@ export default function HomeScreen() {
 // STYLES
 // ==================================================
 
-const styles = StyleSheet.create({
+const styles =
+  StyleSheet.create({
 
-  screen: {
-    flex: 1,
-    backgroundColor: "#F8FBFA",
-  },
-
-  container: {
-    paddingHorizontal: 18,
-    paddingTop: 55,
-    paddingBottom: 100,
-  },
-
-
-  // ================================================
-  // HEADER
-  // ================================================
-
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 18,
-  },
-
-  goodMorning: {
-    fontSize: 13,
-    color: "#617276",
-    marginBottom: 2,
-  },
-
-  userName: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#173B42",
-    marginBottom: 5,
-  },
-
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  locationName: {
-    fontSize: 12,
-    color: "#526A6E",
-    marginLeft: 4,
-  },
-
-  headerIcons: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  profileCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#DCEEEF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-
-  // ================================================
-  // SEARCH
-  // ================================================
-
-  searchBar: {
-    height: 48,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#E2EBE9",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 13,
-    marginBottom: 14,
-
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    shadowOffset: {
-      width: 0,
-      height: 2,
+    screen: {
+      flex: 1,
+      backgroundColor: "#F8FBFA",
     },
 
-    elevation: 2,
-  },
-
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: "#263F43",
-    paddingHorizontal: 9,
-  },
-
-  voiceButton: {
-    paddingHorizontal: 7,
-    paddingVertical: 6,
-  },
-
-
-  // ================================================
-  // BANNER
-  // ================================================
-
-  banner: {
-    height: 105,
-    backgroundColor: "#D9F2F3",
-    borderRadius: 14,
-    overflow: "hidden",
-    flexDirection: "row",
-    marginBottom: 15,
-  },
-
-  bannerTextArea: {
-    flex: 1,
-    paddingLeft: 15,
-    paddingTop: 15,
-  },
-
-  bannerTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#17434A",
-    lineHeight: 20,
-  },
-
-  bannerSubtitle: {
-    fontSize: 11,
-    color: "#507075",
-    marginTop: 8,
-  },
-
-  bannerImageContainer: {
-    width: 105,
-    justifyContent: "center",
-    alignItems: "center",
-    position: "relative",
-  },
-
-  medicalIcon: {
-    position: "absolute",
-    top: 34,
-  },
-
-
-  // ================================================
-  // QUICK ACTIONS
-  // ================================================
-
-  quickGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 21,
-  },
-
-  quickCard: {
-    width: "48%",
-    height: 103,
-    borderRadius: 13,
-    padding: 12,
-    marginBottom: 10,
-  },
-
-  blueCard: {
-    backgroundColor: "#E7F1FF",
-  },
-
-  greenCard: {
-    backgroundColor: "#E4F7EF",
-  },
-
-  purpleCard: {
-    backgroundColor: "#F2EAF8",
-  },
-
-  yellowCard: {
-    backgroundColor: "#FFF3DF",
-  },
-
-  quickIconBlue: {
-    width: 35,
-    height: 35,
-    borderRadius: 11,
-    backgroundColor: "#D5E8FF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-
-  quickIconGreen: {
-    width: 35,
-    height: 35,
-    borderRadius: 11,
-    backgroundColor: "#D0EFDF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-
-  quickIconPurple: {
-    width: 35,
-    height: 35,
-    borderRadius: 11,
-    backgroundColor: "#E5D7F0",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-
-  quickIconYellow: {
-    width: 35,
-    height: 35,
-    borderRadius: 11,
-    backgroundColor: "#FBE8C4",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-
-  quickTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#30484C",
-  },
-
-  quickSubtitle: {
-    fontSize: 11,
-    color: "#66797C",
-    marginTop: 2,
-  },
-
-
-  // ================================================
-  // SECTION HEADER
-  // ================================================
-
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 11,
-  },
-
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#203F44",
-  },
-
-  viewAll: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#4B8F91",
-  },
-
-  resultCount: {
-    fontSize: 12,
-    color: "#6A7D80",
-  },
-
-
-  // ================================================
-  // POPULAR TREATMENTS
-  // ================================================
-
-  treatmentRow: {
-    paddingBottom: 20,
-    gap: 13,
-  },
-
-  treatmentItem: {
-    width: 70,
-    alignItems: "center",
-  },
-
-  treatmentIconRed: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: "#FBE7E7",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-
-  treatmentIconYellow: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#FFF4D6",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  treatmentIconBlue: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: "#E4F2F5",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-
-  treatmentIconPurple: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: "#F0E7F6",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-
-  treatmentIconTeal: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: "#E0F2F2",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-
-  treatmentName: {
-    fontSize: 10,
-    color: "#52666A",
-    textAlign: "center",
-  },
-
-
-  // ================================================
-  // RECOMMEND BUTTON
-  // ================================================
-
-  recommendButton: {
-    height: 48,
-    backgroundColor: "#267D73",
-    borderRadius: 13,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginBottom: 20,
-  },
-
-  recommendButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-
-  // ================================================
-  // RESULTS
-  // ================================================
-
-  resultsSection: {
-    marginBottom: 20,
-  },
-
-  hospitalCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 15,
-    padding: 14,
-    marginBottom: 12,
-
-    borderWidth: 1,
-    borderColor: "#E4ECEA",
-
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    shadowOffset: {
-      width: 0,
-      height: 2,
+    container: {
+      paddingHorizontal: 18,
+      paddingTop: 55,
+      paddingBottom: 100,
     },
 
-    elevation: 2,
-  },
 
-  bestHospitalCard: {
-    borderColor: "#8ACAC2",
-  },
+    // ================================================
+    // HEADER
+    // ================================================
 
-  bestBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: "#E1F3EF",
-    borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginBottom: 9,
-  },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 18,
+    },
 
-  bestBadgeText: {
-    color: "#267D73",
-    fontSize: 9,
-    fontWeight: "800",
-  },
+    goodMorning: {
+      fontSize: 13,
+      color: "#617276",
+      marginBottom: 2,
+    },
 
-  hospitalTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+    userName: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: "#173B42",
+      marginBottom: 5,
+    },
 
-  hospitalIcon: {
-    width: 45,
-    height: 45,
-    borderRadius: 13,
-    backgroundColor: "#E6F3F1",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 11,
-  },
+    locationRow: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
 
-  hospitalTitleArea: {
-    flex: 1,
-  },
+    locationName: {
+      fontSize: 12,
+      color: "#526A6E",
+      marginLeft: 4,
+    },
 
-  hospitalName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#243E43",
-    marginBottom: 4,
-  },
+    headerIcons: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
 
-  hospitalLocation: {
-    fontSize: 11,
-    color: "#708084",
-  },
+    iconButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      justifyContent: "center",
+      alignItems: "center",
+    },
 
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    borderTopWidth: 1,
-    borderTopColor: "#EDF1F0",
-    marginTop: 13,
-    paddingTop: 12,
-  },
-
-  infoLabel: {
-    fontSize: 9,
-    color: "#839194",
-    marginBottom: 3,
-  },
-
-  infoValue: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#314B50",
-  },
-
-  scoreRow: {
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#EDF1F0",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  scoreLabel: {
-    fontSize: 10,
-    color: "#6A7D80",
-  },
-
-  scoreValue: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#267D73",
-  },
-
-  nearDistance: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#267D73",
-  },
+    profileCircle: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: "#DCEEEF",
+      justifyContent: "center",
+      alignItems: "center",
+    },
 
 
-  // ================================================
-  // CLEAR
-  // ================================================
+    // ================================================
+    // SEARCH
+    // ================================================
 
-  clearButton: {
-    alignSelf: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    marginBottom: 15,
-  },
+    searchBar: {
+      height: 48,
+      backgroundColor: "#FFFFFF",
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: "#E2EBE9",
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 13,
+      marginBottom: 14,
 
-  clearText: {
-    color: "#718387",
-    fontSize: 12,
-    fontWeight: "600",
-  },
+      shadowColor: "#000",
+      shadowOpacity: 0.04,
+      shadowRadius: 5,
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+
+      elevation: 2,
+    },
+
+    searchInput: {
+      flex: 1,
+      fontSize: 13,
+      color: "#263F43",
+      paddingHorizontal: 9,
+    },
+
+    voiceButton: {
+      paddingHorizontal: 7,
+      paddingVertical: 6,
+    },
 
 
-  // ================================================
-  // BOTTOM NAVIGATION
-  // ================================================
+    // ================================================
+    // BANNER
+    // ================================================
+
+    banner: {
+      height: 105,
+      backgroundColor: "#D9F2F3",
+      borderRadius: 14,
+      overflow: "hidden",
+      flexDirection: "row",
+      marginBottom: 15,
+    },
+
+    bannerTextArea: {
+      flex: 1,
+      paddingLeft: 15,
+      paddingTop: 15,
+    },
+
+    bannerTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: "#17434A",
+      lineHeight: 20,
+    },
+
+    bannerSubtitle: {
+      fontSize: 11,
+      color: "#507075",
+      marginTop: 8,
+    },
+
+    bannerImageContainer: {
+      width: 105,
+      justifyContent: "center",
+      alignItems: "center",
+      position: "relative",
+    },
+
+    medicalIcon: {
+      position: "absolute",
+      top: 34,
+    },
 
 
+    // ================================================
+    // QUICK ACTIONS
+    // ================================================
+
+    quickGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+      marginBottom: 21,
+    },
+
+    quickCard: {
+      width: "48%",
+      height: 103,
+      borderRadius: 13,
+      padding: 12,
+      marginBottom: 10,
+    },
+
+    blueCard: {
+      backgroundColor: "#E7F1FF",
+    },
+
+    greenCard: {
+      backgroundColor: "#E4F7EF",
+    },
+
+    purpleCard: {
+      backgroundColor: "#F2EAF8",
+    },
+
+    yellowCard: {
+      backgroundColor: "#FFF3DF",
+    },
+
+    quickIconBlue: {
+      width: 35,
+      height: 35,
+      borderRadius: 11,
+      backgroundColor: "#D5E8FF",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+
+    quickIconGreen: {
+      width: 35,
+      height: 35,
+      borderRadius: 11,
+      backgroundColor: "#D0EFDF",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+
+    quickIconPurple: {
+      width: 35,
+      height: 35,
+      borderRadius: 11,
+      backgroundColor: "#E5D7F0",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+
+    quickIconYellow: {
+      width: 35,
+      height: 35,
+      borderRadius: 11,
+      backgroundColor: "#FBE8C4",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+
+    quickTitle: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: "#30484C",
+    },
+
+    quickSubtitle: {
+      fontSize: 11,
+      color: "#66797C",
+      marginTop: 2,
+    },
 
 
-});
+    // ================================================
+    // SECTION HEADER
+    // ================================================
+
+    sectionHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 11,
+    },
+
+    sectionTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: "#203F44",
+    },
+
+    viewAll: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: "#4B8F91",
+    },
+
+    resultCount: {
+      fontSize: 12,
+      color: "#6A7D80",
+    },
+
+
+    // ================================================
+    // TREATMENTS / EMERGENCY
+    // ================================================
+
+    treatmentRow: {
+      paddingBottom: 20,
+      gap: 13,
+    },
+
+    treatmentItem: {
+      width: 70,
+      alignItems: "center",
+    },
+
+    treatmentIconRed: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      backgroundColor: "#FBE7E7",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+
+    treatmentIconYellow: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: "#FFF4D6",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    treatmentIconBlue: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      backgroundColor: "#E4F2F5",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+
+    treatmentIconPurple: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      backgroundColor: "#F0E7F6",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+
+    treatmentIconTeal: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      backgroundColor: "#E0F2F2",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+
+    treatmentName: {
+      fontSize: 10,
+      color: "#52666A",
+      textAlign: "center",
+    },
+
+
+    // ================================================
+    // RECOMMEND BUTTON
+    // ================================================
+
+    recommendButton: {
+      height: 48,
+      backgroundColor: "#267D73",
+      borderRadius: 13,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginBottom: 20,
+    },
+
+    recommendButtonText: {
+      color: "#FFFFFF",
+      fontSize: 14,
+      fontWeight: "700",
+    },
+
+
+    // ================================================
+    // RESULTS
+    // ================================================
+
+    resultsSection: {
+      marginBottom: 20,
+    },
+
+    hospitalCard: {
+      backgroundColor: "#FFFFFF",
+      borderRadius: 15,
+      padding: 14,
+      marginBottom: 12,
+
+      borderWidth: 1,
+      borderColor: "#E4ECEA",
+
+      shadowColor: "#000",
+      shadowOpacity: 0.04,
+      shadowRadius: 5,
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+
+      elevation: 2,
+    },
+
+    bestHospitalCard: {
+      borderColor: "#8ACAC2",
+    },
+
+    bestBadge: {
+      alignSelf: "flex-start",
+      backgroundColor: "#E1F3EF",
+      borderRadius: 7,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      marginBottom: 9,
+    },
+
+    bestBadgeText: {
+      color: "#267D73",
+      fontSize: 9,
+      fontWeight: "800",
+    },
+
+    hospitalTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+
+    hospitalIcon: {
+      width: 45,
+      height: 45,
+      borderRadius: 13,
+      backgroundColor: "#E6F3F1",
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 11,
+    },
+
+    hospitalTitleArea: {
+      flex: 1,
+    },
+
+    hospitalName: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: "#243E43",
+      marginBottom: 4,
+    },
+
+    hospitalLocation: {
+      fontSize: 11,
+      color: "#708084",
+    },
+
+    infoRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      borderTopWidth: 1,
+      borderTopColor: "#EDF1F0",
+      marginTop: 13,
+      paddingTop: 12,
+    },
+
+    infoLabel: {
+      fontSize: 9,
+      color: "#839194",
+      marginBottom: 3,
+    },
+
+    infoValue: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#314B50",
+    },
+
+    scoreRow: {
+      marginTop: 12,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: "#EDF1F0",
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+
+    scoreLabel: {
+      fontSize: 10,
+      color: "#6A7D80",
+    },
+
+    scoreValue: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: "#267D73",
+    },
+
+    nearDistance: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#267D73",
+    },
+
+
+    // ================================================
+    // CLEAR
+    // ================================================
+
+    clearButton: {
+      alignSelf: "center",
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      marginBottom: 15,
+    },
+
+    clearText: {
+      color: "#718387",
+      fontSize: 12,
+      fontWeight: "600",
+    },
+
+  });

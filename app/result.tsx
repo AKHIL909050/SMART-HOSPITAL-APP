@@ -12,16 +12,71 @@ import {
   View,
 } from "react-native";
 
+// =====================================================
+// DISTANCE CALCULATION
+// =====================================================
+
+const calculateDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+) => {
+  const R = 6371;
+
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+
+  const c =
+    2 *
+    Math.atan2(
+      Math.sqrt(a),
+      Math.sqrt(1 - a)
+    );
+
+  return R * c;
+};
+
+// =====================================================
+// API
+// =====================================================
+
 const API_URL = "http://192.168.1.245:8000";
 
 export default function ResultScreen() {
-  const { search } = useLocalSearchParams<{ search?: string }>();
+  const { search } =
+    useLocalSearchParams<{ search?: string }>();
 
   const treatment =
-    typeof search === "string" ? search.trim() : "";
+    typeof search === "string"
+      ? search.trim()
+      : "";
 
-  const [hospitals, setHospitals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  // =====================================================
+  // STATE
+  // =====================================================
+
+  const [hospitals, setHospitals] =
+    useState<any[]>([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [userLatitude, setUserLatitude] =
+    useState<number | null>(null);
+
+  const [userLongitude, setUserLongitude] =
+    useState<number | null>(null);
+
+  // =====================================================
+  // LOAD RECOMMENDATIONS
+  // =====================================================
 
   useEffect(() => {
     if (treatment) {
@@ -29,38 +84,148 @@ export default function ResultScreen() {
     }
   }, [treatment]);
 
-  const getRecommendations = async (service: string) => {
+  // =====================================================
+  // GET HOSPITAL COORDINATES FROM ADDRESS
+  // =====================================================
+
+  const addHospitalCoordinates = async (
+    hospitalList: any[]
+  ) => {
+    const updatedHospitals =
+      await Promise.all(
+        hospitalList.map(
+          async (hospital) => {
+            try {
+              const address =
+                hospital.address ??
+                hospital.district ??
+                "";
+
+              if (!address) {
+                return hospital;
+              }
+
+              const searchAddress =
+                `${address}, Hyderabad, Telangana, India`;
+
+              const locations =
+                await Location.geocodeAsync(
+                  searchAddress
+                );
+
+              if (
+                locations.length > 0
+              ) {
+                return {
+                  ...hospital,
+                  latitude:
+                    locations[0].latitude,
+                  longitude:
+                    locations[0].longitude,
+                };
+              }
+
+              return hospital;
+            } catch (error) {
+              console.log(
+                "GEOCODING ERROR:",
+                hospital.hospital_name,
+                error
+              );
+
+              return hospital;
+            }
+          }
+        )
+      );
+
+    return updatedHospitals;
+  };
+
+  // =====================================================
+  // GET RECOMMENDATIONS
+  // =====================================================
+
+  const getRecommendations = async (
+    service: string
+  ) => {
     setLoading(true);
     setHospitals([]);
 
     try {
+      // -------------------------------------------------
+      // GET USER LOCATION
+      // -------------------------------------------------
+
       const permission =
         await Location.requestForegroundPermissionsAsync();
 
-      if (permission.status !== "granted") {
+      if (
+        permission.status !==
+        "granted"
+      ) {
         Alert.alert(
           "Location Required",
           "Please allow location access to find recommended hospitals near you."
         );
+
         setLoading(false);
         return;
       }
 
-      const currentLocation =
-        await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
+      let latitude = 17.3850;
+      let longitude = 78.4867;
 
-      const latitude = currentLocation.coords.latitude;
-      const longitude = currentLocation.coords.longitude;
+try {
+  const currentLocation =
+      await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+    if (
+      currentLocation &&
+      currentLocation.coords
+    ) {
+      latitude =
+        currentLocation.coords.latitude;
+
+      longitude =
+        currentLocation.coords.longitude;
+
+      setUserLatitude(latitude);
+      setUserLongitude(longitude);
+    }
+  } catch (locationError) {
+    console.log(
+      "LOCATION ERROR:",
+      locationError
+    );
+
+    // Hyderabad fallback
+    setUserLatitude(17.3850);
+    setUserLongitude(78.4867);
+  }
+
+   
+      // -------------------------------------------------
+      // API REQUEST
+      // -------------------------------------------------
 
       const url =
         `${API_URL}/hospitals/recommend` +
         `?latitude=${latitude}` +
         `&longitude=${longitude}` +
-        `&service=${encodeURIComponent(service)}`;
+        `&service=${encodeURIComponent(
+          service
+        )}`;
 
-      const response = await fetch(url);
+      console.log(
+        "RECOMMENDATION URL:",
+        url
+      );
+
+      const response =
+        await fetch(url);
 
       if (!response.ok) {
         throw new Error(
@@ -68,22 +233,53 @@ export default function ResultScreen() {
         );
       }
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
-      const recommendedHospitals = Array.isArray(data.hospitals)
-        ? data.hospitals
-        : [];
+      console.log(
+        "RECOMMENDATION DATA:",
+        data
+      );
 
-      setHospitals(recommendedHospitals);
+      const recommendedHospitals =
+        Array.isArray(
+          data.hospitals
+        )
+          ? data.hospitals
+          : [];
 
-      if (recommendedHospitals.length === 0) {
+      // -------------------------------------------------
+      // ADD COORDINATES TO HOSPITALS
+      // USING THEIR ADDRESS
+      // -------------------------------------------------
+
+      const hospitalsWithCoordinates =
+        await addHospitalCoordinates(
+          recommendedHospitals
+        );
+
+      setHospitals(
+        hospitalsWithCoordinates
+      );
+
+      // -------------------------------------------------
+      // NO RESULTS
+      // -------------------------------------------------
+
+      if (
+        hospitalsWithCoordinates.length ===
+        0
+      ) {
         Alert.alert(
           "No Hospitals Found",
           `No hospitals were found for "${service}".`
         );
       }
     } catch (error) {
-      console.log("RESULT ERROR:", error);
+      console.log(
+        "RESULT ERROR:",
+        error
+      );
 
       Alert.alert(
         "Search Error",
@@ -94,54 +290,78 @@ export default function ResultScreen() {
     }
   };
 
-  const openHospitalDetails = (hospital: any) => {
+  // =====================================================
+  // OPEN HOSPITAL DETAILS
+  // =====================================================
+
+  const openHospitalDetails = (
+    hospital: any
+  ) => {
     router.push({
       pathname: "/details",
+
       params: {
-        name: hospital.name ?? "Hospital",
+        name:
+          hospital.hospital_name ??
+          "Hospital",
 
-        city: hospital.city ?? "",
+        address:
+          hospital.address ?? "",
 
-        state: hospital.state ?? "",
+        district:
+          hospital.district ?? "",
 
-        distance:
-          hospital.distance_km !== undefined
-            ? String(hospital.distance_km)
-            : "Not calculated",
+        pincode:
+          hospital.pincode ?? "",
 
-        latitude:
-          hospital.latitude !== undefined
-            ? String(hospital.latitude)
-            : "",
+        hospital_type:
+          hospital.hospital_type ?? "",
 
-        longitude:
-          hospital.longitude !== undefined
-            ? String(hospital.longitude)
-            : "",
+        care_type:
+          hospital.care_type ?? "",
 
-        treatment_cost:
-          hospital.treatment_cost !== undefined
-            ? String(hospital.treatment_cost)
-            : "Not available",
+        specialties:
+          hospital.specialties ?? "",
 
-        quality_score:
-          hospital.quality_score !== undefined
-            ? String(hospital.quality_score)
-            : "Not available",
+        facilities:
+          hospital.facilities ?? "",
 
-        recommendation_score:
-          hospital.recommendation_score !== undefined
-            ? String(hospital.recommendation_score)
-            : "Not available",
+        accreditation:
+          hospital.accreditation ?? "",
 
-        services: Array.isArray(hospital.services)
-          ? hospital.services.join(", ")
-          : hospital.services
-            ? String(hospital.services)
-            : "Not available",
+        established_year:
+          hospital.established_year ?? "",
+
+        doctors_count:
+          hospital.doctors_count ?? "",
+
+        specialists_count:
+          hospital.specialists_count ?? "",
+
+        total_beds:
+          hospital.total_beds ?? "",
+
+        emergency_services:
+          hospital.emergency_services ?? "",
+
+        telephone:
+          hospital.telephone ?? "",
+
+        emergency_number:
+          hospital.emergency_number ?? "",
+
+        website:
+          hospital.website ?? "",
+
+        ayush:
+          hospital.ayush ?? "",
       },
     });
   };
+
+  // =====================================================
+  // RETRY
+  // =====================================================
 
   const retrySearch = () => {
     if (treatment) {
@@ -149,13 +369,23 @@ export default function ResultScreen() {
     }
   };
 
+  // =====================================================
+  // PAGE
+  // =====================================================
+
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={
+          styles.container
+        }
+        showsVerticalScrollIndicator={
+          false
+        }
       >
-        {/* HEADER */}
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
         <View style={styles.header}>
           <Pressable
@@ -169,292 +399,526 @@ export default function ResultScreen() {
             />
           </Pressable>
 
-          <View style={styles.headerText}>
-            <Text style={styles.title}>
+          <View
+            style={styles.headerText}
+          >
+            <Text
+              style={styles.title}
+            >
               Recommended Hospitals
             </Text>
 
             {treatment ? (
-              <Text style={styles.subtitle} numberOfLines={1}>
+              <Text
+                style={
+                  styles.subtitle
+                }
+                numberOfLines={1}
+              >
                 {`Results for "${treatment}"`}
               </Text>
             ) : null}
           </View>
         </View>
 
-        {/* SEARCH INFORMATION */}
+        {/* =================================================
+            SEARCH INFORMATION
+        ================================================= */}
 
-        {treatment && !loading && hospitals.length > 0 && (
-          <View style={styles.searchInfoCard}>
-            <View style={styles.searchInfoIcon}>
-              <Ionicons
-                name="medical-outline"
-                size={23}
-                color="#267D73"
-              />
-            </View>
-
-            <View style={styles.searchInfoText}>
-              <Text style={styles.searchInfoLabel}>
-                Treatment / Service
-              </Text>
-
-              <Text
-                style={styles.searchInfoValue}
-                numberOfLines={2}
+        {treatment &&
+          !loading &&
+          hospitals.length > 0 && (
+            <View
+              style={
+                styles.searchInfoCard
+              }
+            >
+              <View
+                style={
+                  styles.searchInfoIcon
+                }
               >
-                {treatment}
-              </Text>
+                <Ionicons
+                  name="medical-outline"
+                  size={23}
+                  color="#267D73"
+                />
+              </View>
+
+              <View
+                style={
+                  styles.searchInfoText
+                }
+              >
+                <Text
+                  style={
+                    styles.searchInfoLabel
+                  }
+                >
+                  Treatment / Service
+                </Text>
+
+                <Text
+                  style={
+                    styles.searchInfoValue
+                  }
+                  numberOfLines={2}
+                >
+                  {treatment}
+                </Text>
+              </View>
+
+              <View
+                style={styles.countBox}
+              >
+                <Text
+                  style={
+                    styles.countNumber
+                  }
+                >
+                  {hospitals.length}
+                </Text>
+
+                <Text
+                  style={
+                    styles.countLabel
+                  }
+                >
+                  Found
+                </Text>
+              </View>
             </View>
+          )}
 
-            <View style={styles.countBox}>
-              <Text style={styles.countNumber}>
-                {hospitals.length}
-              </Text>
-
-              <Text style={styles.countLabel}>
-                Found
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* LOADING */}
+        {/* =================================================
+            LOADING
+        ================================================= */}
 
         {loading && (
-          <View style={styles.loadingBox}>
-            <View style={styles.loadingIcon}>
+          <View
+            style={styles.loadingBox}
+          >
+            <View
+              style={styles.loadingIcon}
+            >
               <ActivityIndicator
                 size="large"
                 color="#267D73"
               />
             </View>
 
-            <Text style={styles.loadingTitle}>
+            <Text
+              style={
+                styles.loadingTitle
+              }
+            >
               Finding hospitals
             </Text>
 
-            <Text style={styles.loadingText}>
+            <Text
+              style={
+                styles.loadingText
+              }
+            >
               Looking for the best hospitals near your location...
             </Text>
           </View>
         )}
 
-        {/* RESULTS */}
+        {/* =================================================
+            RESULTS
+        ================================================= */}
 
-        {!loading && hospitals.length > 0 && (
-          <View style={styles.resultsSection}>
-            <View style={styles.resultsHeader}>
-              <View>
-                <Text style={styles.resultsTitle}>
-                  Best Matches
-                </Text>
+        {!loading &&
+          hospitals.length > 0 && (
+            <View
+              style={
+                styles.resultsSection
+              }
+            >
+              <View
+                style={
+                  styles.resultsHeader
+                }
+              >
+                <View>
+                  <Text
+                    style={
+                      styles.resultsTitle
+                    }
+                  >
+                    Best Matches
+                  </Text>
 
-                <Text style={styles.resultsSubtitle}>
-                  Hospitals recommended for your treatment
-                </Text>
+                  <Text
+                    style={
+                      styles.resultsSubtitle
+                    }
+                  >
+                    Hospitals recommended for your treatment
+                  </Text>
+                </View>
               </View>
-            </View>
 
-            {hospitals.map((hospital, index) => {
-              const isBestMatch = index === 0;
+              {hospitals.map(
+                (
+                  hospital,
+                  index
+                ) => {
+                  // =================================================
+                  // CALCULATE DISTANCE
+                  // =================================================
 
-              return (
-                <Pressable
-                  key={hospital.id ?? `hospital-${index}`}
-                  style={[
-                    styles.hospitalCard,
-                    isBestMatch && styles.bestHospitalCard,
-                  ]}
-                  onPress={() =>
-                    openHospitalDetails(hospital)
-                  }
-                >
-                  {/* BEST MATCH LABEL */}
+            const distance =
+              userLatitude !== null &&
+              userLongitude !== null &&
+              hospital.latitude !== undefined &&
+              hospital.longitude !== undefined
+                ? calculateDistance(
+                    userLatitude,
+                    userLongitude,
+                    Number(hospital.latitude),
+                    Number(hospital.longitude)
+                  )
+                : null;
 
-                  {isBestMatch && (
-                    <View style={styles.bestMatchBadge}>
-                      <Ionicons
-                        name="sparkles"
-                        size={13}
-                        color="#267D73"
-                      />
+                  const isBestMatch =
+                    index === 0;
 
-                      <Text style={styles.bestMatchText}>
-                        Best Match
-                      </Text>
-                    </View>
-                  )}
+                  return (
+                    <Pressable
+                      key={
+                        hospital.hospital_id ??
+                        hospital.id ??
+                        `hospital-${index}`
+                      }
+                      style={[
+                        styles.hospitalCard,
+                        isBestMatch &&
+                          styles.bestHospitalCard,
+                      ]}
+                      onPress={() =>
+                        openHospitalDetails(
+                          hospital
+                        )
+                      }
+                    >
+                      {/* =================================================
+                          BEST MATCH
+                      ================================================= */}
 
-                  {/* HOSPITAL HEADER */}
+                      {isBestMatch && (
+                        <View
+                          style={
+                            styles.bestMatchBadge
+                          }
+                        >
+                          <Ionicons
+                            name="sparkles"
+                            size={13}
+                            color="#267D73"
+                          />
 
-                  <View style={styles.hospitalTopRow}>
-                    <View style={styles.hospitalIcon}>
-                      <Ionicons
-                        name="medical"
-                        size={25}
-                        color="#267D73"
-                      />
-                    </View>
+                          <Text
+                            style={
+                              styles.bestMatchText
+                            }
+                          >
+                            Best Match
+                          </Text>
+                        </View>
+                      )}
 
-                    <View style={styles.hospitalTitleArea}>
-                      <Text
-                        style={styles.hospitalName}
-                        numberOfLines={2}
+                      {/* =================================================
+                          HOSPITAL HEADER
+                      ================================================= */}
+
+                      <View
+                        style={
+                          styles.hospitalTopRow
+                        }
                       >
-                        {hospital.name ??
-                          "Hospital Name"}
-                      </Text>
-
-                      <View style={styles.locationRow}>
-                        <Ionicons
-                          name="location-outline"
-                          size={14}
-                          color="#718387"
-                        />
-
-                        <Text
-                          style={styles.hospitalLocation}
-                          numberOfLines={1}
+                        <View
+                          style={
+                            styles.hospitalIcon
+                          }
                         >
-                          {hospital.city ?? ""}
-                          {hospital.city &&
-                          hospital.state
-                            ? ", "
-                            : ""}
-                          {hospital.state ?? ""}
-                        </Text>
-                      </View>
-                    </View>
+                          <Ionicons
+                            name="medical"
+                            size={25}
+                            color="#267D73"
+                          />
+                        </View>
 
-                    <Ionicons
-                      name="chevron-forward"
-                      size={21}
-                      color="#829497"
-                    />
-                  </View>
+                        <View
+                          style={
+                            styles.hospitalTitleArea
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.hospitalName
+                            }
+                            numberOfLines={2}
+                          >
+                            {hospital.hospital_name ??
+                              "Hospital Name"}
+                          </Text>
 
-                  {/* HOSPITAL INFORMATION */}
+                          <View
+                            style={
+                              styles.locationRow
+                            }
+                          >
+                            <Ionicons
+                              name="location-outline"
+                              size={14}
+                              color="#718387"
+                            />
 
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoItem}>
-                      <View style={styles.infoIcon}>
+                            <Text
+                              style={
+                                styles.hospitalLocation
+                              }
+                              numberOfLines={
+                                1
+                              }
+                            >
+                              {hospital.address ??
+                                hospital.district ??
+                                "Location not available"}
+                            </Text>
+                          </View>
+
+                          {/* CALCULATED DISTANCE */}
+
+                          <Text
+                            style={
+                              styles.hospitalDistance
+                            }
+                          >
+                            {distance !==
+                            null
+                              ? `${distance.toFixed(
+                                  1
+                                )} km away`
+                              : "Distance unavailable"}
+                          </Text>
+                        </View>
+
                         <Ionicons
-                          name="navigate-outline"
+                          name="chevron-forward"
+                          size={21}
+                          color="#829497"
+                        />
+                      </View>
+
+                      {/* =================================================
+                          INFORMATION ROW
+                      ================================================= */}
+
+                      <View
+                        style={
+                          styles.infoRow
+                        }
+                      >
+                        {/* DISTANCE */}
+
+                        <View
+                          style={
+                            styles.infoItem
+                          }
+                        >
+                          <View
+                            style={
+                              styles.infoIcon
+                            }
+                          >
+                            <Ionicons
+                              name="navigate-outline"
+                              size={16}
+                              color="#267D73"
+                            />
+                          </View>
+
+                          <View>
+                            <Text
+                              style={
+                                styles.infoLabel
+                              }
+                            >
+                              Distance
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.infoValue
+                              }
+                            >
+                              {distance !==
+                              null
+                                ? `${distance.toFixed(
+                                    1
+                                  )} km`
+                                : "—"}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* TREATMENT COST */}
+
+                        <View
+                          style={
+                            styles.infoItem
+                          }
+                        >
+                          <View
+                            style={
+                              styles.infoIcon
+                            }
+                          >
+                            <Ionicons
+                              name="cash-outline"
+                              size={16}
+                              color="#267D73"
+                            />
+                          </View>
+
+                          <View>
+                            <Text
+                              style={
+                                styles.infoLabel
+                              }
+                            >
+                              Treatment Cost
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.infoValue
+                              }
+                            >
+                              {hospital.treatment_cost !==
+                              undefined
+                                ? `₹${hospital.treatment_cost}`
+                                : "—"}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* =================================================
+                          QUALITY + RECOMMENDATION
+                      ================================================= */}
+
+                      <View
+                        style={
+                          styles.bottomRow
+                        }
+                      >
+                        <View
+                          style={
+                            styles.qualityBox
+                          }
+                        >
+                          <Ionicons
+                            name="star"
+                            size={16}
+                            color="#C18A18"
+                          />
+
+                          <Text
+                            style={
+                              styles.qualityText
+                            }
+                          >
+                            {hospital.quality_score !==
+                            undefined
+                              ? `${hospital.quality_score}/5`
+                              : "N/A"}
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.qualityLabel
+                            }
+                          >
+                            Quality
+                          </Text>
+                        </View>
+
+                        {hospital.recommendation_score !==
+                          undefined && (
+                          <View
+                            style={
+                              styles.recommendationBox
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.recommendationLabel
+                              }
+                            >
+                              Recommendation
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.recommendationValue
+                              }
+                            >
+                              {
+                                hospital.recommendation_score
+                              }
+                              /100
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* =================================================
+                          DETAILS
+                      ================================================= */}
+
+                      <View
+                        style={
+                          styles.detailsRow
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.detailsText
+                          }
+                        >
+                          View hospital details
+                        </Text>
+
+                        <Ionicons
+                          name="arrow-forward"
                           size={16}
                           color="#267D73"
                         />
                       </View>
+                    </Pressable>
+                  );
+                }
+              )}
+            </View>
+          )}
 
-                      <View>
-                        <Text style={styles.infoLabel}>
-                          Distance
-                        </Text>
-
-                        <Text style={styles.infoValue}>
-                          {hospital.distance_km !==
-                          undefined
-                            ? `${hospital.distance_km} km`
-                            : "—"}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.infoItem}>
-                      <View style={styles.infoIcon}>
-                        <Ionicons
-                          name="cash-outline"
-                          size={16}
-                          color="#267D73"
-                        />
-                      </View>
-
-                      <View>
-                        <Text style={styles.infoLabel}>
-                          Treatment Cost
-                        </Text>
-
-                        <Text style={styles.infoValue}>
-                          {hospital.treatment_cost !==
-                          undefined
-                            ? `₹${hospital.treatment_cost}`
-                            : "—"}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* QUALITY + SCORE */}
-
-                  <View style={styles.bottomRow}>
-                    <View style={styles.qualityBox}>
-                      <Ionicons
-                        name="star"
-                        size={16}
-                        color="#C18A18"
-                      />
-
-                      <Text style={styles.qualityText}>
-                        {hospital.quality_score !==
-                        undefined
-                          ? `${hospital.quality_score}/5`
-                          : "N/A"}
-                      </Text>
-
-                      <Text style={styles.qualityLabel}>
-                        Quality
-                      </Text>
-                    </View>
-
-                    {hospital.recommendation_score !==
-                      undefined && (
-                      <View style={styles.recommendationBox}>
-                        <Text
-                          style={
-                            styles.recommendationLabel
-                          }
-                        >
-                          Recommendation
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.recommendationValue
-                          }
-                        >
-                          {hospital.recommendation_score}
-                          /100
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* VIEW DETAILS */}
-
-                  <View style={styles.detailsRow}>
-                    <Text style={styles.detailsText}>
-                      View hospital details
-                    </Text>
-
-                    <Ionicons
-                      name="arrow-forward"
-                      size={16}
-                      color="#267D73"
-                    />
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-
-        {/* NO RESULTS */}
+        {/* =================================================
+            NO RESULTS
+        ================================================= */}
 
         {!loading &&
           hospitals.length === 0 &&
           treatment && (
-            <View style={styles.emptyBox}>
-              <View style={styles.emptyIcon}>
+            <View
+              style={styles.emptyBox}
+            >
+              <View
+                style={styles.emptyIcon}
+              >
                 <Ionicons
                   name="search-outline"
                   size={42}
@@ -462,16 +926,22 @@ export default function ResultScreen() {
                 />
               </View>
 
-              <Text style={styles.emptyTitle}>
+              <Text
+                style={styles.emptyTitle}
+              >
                 No hospitals found
               </Text>
 
-              <Text style={styles.emptyText}>
+              <Text
+                style={styles.emptyText}
+              >
                 {`We couldn't find hospitals matching "${treatment}".`}
               </Text>
 
               <Pressable
-                style={styles.retryButton}
+                style={
+                  styles.retryButton
+                }
                 onPress={retrySearch}
               >
                 <Ionicons
@@ -480,54 +950,77 @@ export default function ResultScreen() {
                   color="#FFFFFF"
                 />
 
-                <Text style={styles.retryText}>
+                <Text
+                  style={styles.retryText}
+                >
                   Try Again
                 </Text>
               </Pressable>
             </View>
           )}
 
-        {/* NO SEARCH */}
+        {/* =================================================
+            NO SEARCH
+        ================================================= */}
 
-        {!loading && !treatment && (
-          <View style={styles.emptyBox}>
-            <View style={styles.emptyIcon}>
-              <Ionicons
-                name="search-outline"
-                size={42}
-                color="#829497"
-              />
-            </View>
-
-            <Text style={styles.emptyTitle}>
-              Search for a treatment
-            </Text>
-
-            <Text style={styles.emptyText}>
-              Go back and enter a treatment or hospital
-              service to see recommendations.
-            </Text>
-
-            <Pressable
-              style={styles.retryButton}
-              onPress={() => router.back()}
+        {!loading &&
+          !treatment && (
+            <View
+              style={styles.emptyBox}
             >
-              <Ionicons
-                name="arrow-back"
-                size={17}
-                color="#FFFFFF"
-              />
+              <View
+                style={styles.emptyIcon}
+              >
+                <Ionicons
+                  name="search-outline"
+                  size={42}
+                  color="#829497"
+                />
+              </View>
 
-              <Text style={styles.retryText}>
-                Back to Search
+              <Text
+                style={styles.emptyTitle}
+              >
+                Search for a treatment
               </Text>
-            </Pressable>
-          </View>
-        )}
+
+              <Text
+                style={styles.emptyText}
+              >
+                Go back and enter a treatment or hospital
+                service to see recommendations.
+              </Text>
+
+              <Pressable
+                style={
+                  styles.retryButton
+                }
+                onPress={() =>
+                  router.back()
+                }
+              >
+                <Ionicons
+                  name="arrow-back"
+                  size={17}
+                  color="#FFFFFF"
+                />
+
+                <Text
+                  style={styles.retryText}
+                >
+                  Back to Search
+                </Text>
+              </Pressable>
+            </View>
+          )}
       </ScrollView>
     </View>
   );
 }
+
+// =====================================================
+// STYLES
+// =====================================================
 
 const styles = StyleSheet.create({
   screen: {
@@ -760,6 +1253,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#718387",
     marginLeft: 3,
+  },
+
+  hospitalDistance: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#267D73",
+    marginTop: 4,
   },
 
   /* INFO */
