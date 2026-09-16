@@ -1005,34 +1005,7 @@ export default function HomeScreen() {
           </Pressable>
 
 
-          <Pressable
-            style={[
-              styles.quickCard,
-              styles.purpleCard,
-            ]}
-          >
-
-            <View
-              style={styles.quickIconPurple}
-            >
-
-              <Ionicons
-                name="git-compare-outline"
-                size={22}
-                color="#8B57B5"
-              />
-
-            </View>
-
-            <Text style={styles.quickTitle}>
-              Compare
-            </Text>
-
-            <Text style={styles.quickSubtitle}>
-              Hospitals
-            </Text>
-
-          </Pressable>
+            
 
 
           <Pressable
