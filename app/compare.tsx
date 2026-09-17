@@ -1,8 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import {
-    router,
-    useLocalSearchParams,
-} from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
     Alert,
@@ -15,38 +12,50 @@ import {
 } from "react-native";
 
 export default function CompareScreen() {
-    const params = useLocalSearchParams();
-    
-    const initialTreatment =
-      typeof params.search === "string"
-        ? params.search
-        : "";
-    
-    const initialSelectedHospitals = (() => {
-      if (typeof params.selectedHospitals !== "string") {
+    const {
+      search,
+      treatment: treatmentParam,
+      selectedHospitals: selectedHospitalsParam,
+    } = useLocalSearchParams<{
+      search?: string;
+      treatment?: string;
+      selectedHospitals?: string;
+    }>();
+
+    const [treatment, setTreatment] = useState(
+      typeof treatmentParam === "string"
+        ? treatmentParam
+        : typeof search === "string"
+        ? search
+        : ""
+    );
+
+    const [hospitals, setHospitals] = useState<any[]>(() => {
+      if (!selectedHospitalsParam) {
         return [];
       }
-  
       try {
-        const parsed = JSON.parse(params.selectedHospitals);
-    
+        const parsed = JSON.parse(
+          selectedHospitalsParam as string
+        );
+
         return Array.isArray(parsed) ? parsed : [];
       } catch (error) {
-        console.log("COMPARE HOSPITAL PARSE ERROR:", error);
+        console.log(
+          "SELECTED HOSPITALS PARSE ERROR:",
+          error
+        );
+
         return [];
       }
-    })();
-    
-    const [selectedHospitalList, setSelectedHospitalList] =
-      useState<any[]>(initialSelectedHospitals);
-    
-    const [treatment, setTreatment] =
-      useState(initialTreatment);
-    
-    const selectTreatment = (value: string) => {
-      setTreatment(value);
-    };
-    
+    });
+
+  // Add newly selected hospital
+
+  const selectTreatment = (value: string) => {
+    setTreatment(value);
+  };
+
     const addHospital = () => {
       if (!treatment.trim()) {
         Alert.alert(
@@ -55,26 +64,34 @@ export default function CompareScreen() {
         );
         return;
       }
-  
-      if (selectedHospitalList.length >= 5) {
+
+      if (hospitals.length >= 2) {
         Alert.alert(
-          "Maximum Reached",
+          "Maximum Hospitals",
           "You can compare up to 5 hospitals."
         );
         return;
       }
-  
+
       router.push({
         pathname: "/result",
         params: {
           search: treatment.trim(),
           compareMode: "true",
-          selectedHospitals: JSON.stringify(
-            selectedHospitalList
-          ),
+          selectedHospitals: JSON.stringify(hospitals),
         },
       });
     };
+
+  const removeHospital = (hospitalId: string) => {
+    setHospitals((previousHospitals) =>
+      previousHospitals.filter(
+        (hospital) =>
+          hospital.hospital_id !== hospitalId
+      )
+    );
+  };
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -295,30 +312,105 @@ export default function CompareScreen() {
           Hospitals to Compare
         </Text>
 
-        <View style={styles.emptyHospitalBox}>
-          <View style={styles.emptyIcon}>
-            <Ionicons
-              name="business-outline"
-              size={30}
-              color="#8B57B5"
-            />
+        {hospitals.length === 0 ? (
+          <View style={styles.emptyHospitalBox}>
+            <View style={styles.emptyIcon}>
+              <Ionicons
+                name="business-outline"
+                size={30}
+                color="#8B57B5"
+              />
+            </View>
+
+            <Text style={styles.emptyTitle}>
+              No hospitals added yet
+            </Text>
+
+            <Text style={styles.emptyText}>
+              Add hospitals one by one from the
+              treatment results.
+            </Text>
           </View>
+        ) : (
+          <View>
+            {hospitals.map((hospital, index) => (
+              <View
+                key={
+                  hospital.hospital_id ??
+                  `${hospital.hospital_name}-${index}`
+                }
+                style={styles.hospitalCard}
+              >
+                <View style={styles.hospitalIcon}>
+                  <Ionicons
+                    name="business"
+                    size={23}
+                    color="#8B57B5"
+                  />
+                </View>
 
-          <Text style={styles.emptyTitle}>
-            No hospitals added yet
-          </Text>
+                <View style={styles.hospitalInfo}>
+                  <Text
+                    style={styles.hospitalNumber}
+                  >
+                    Hospital {index + 1}
+                  </Text>
 
-          <Text style={styles.emptyText}>
-            Add hospitals one by one from the
-            treatment results.
-          </Text>
-        </View>
+                  <Text
+                    style={styles.hospitalName}
+                    numberOfLines={2}
+                  >
+                    {hospital.hospital_name ??
+                      "Hospital"}
+                  </Text>
+
+                  {hospital.hospital_type ? (
+                    <Text
+                      style={styles.hospitalType}
+                    >
+                      {hospital.hospital_type}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <Pressable
+                  onPress={() =>
+                    removeHospital(
+                      hospital.hospital_id
+                    )
+                  }
+                  style={styles.removeButton}
+                >
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={22}
+                    color="#B56B6B"
+                  />
+                </Pressable>
+              </View>
+            ))}
+
+            <View style={styles.countBox}>
+              <Ionicons
+                name="checkmark-circle"
+                size={19}
+                color="#8B57B5"
+              />
+
+              <Text style={styles.countText}>
+                {hospitals.length} of 5 hospitals
+                selected
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* ADD HOSPITAL */}
         <Pressable
           style={[
             styles.addButton,
-            !treatment.trim() &&
+            (!treatment.trim() ||
+              hospitals.length >= 5) &&
               styles.disabledButton,
           ]}
           onPress={addHospital}
@@ -333,6 +425,31 @@ export default function CompareScreen() {
             Add Hospital
           </Text>
         </Pressable>
+
+        {/* COMPARE HOSPITALS */}
+        {hospitals.length >= 2 && (
+          <Pressable
+            style={styles.compareButton}
+            onPress={() =>
+              router.push({
+                pathname: "/compare-result",
+                params: {
+                  selectedHospitals: JSON.stringify(hospitals),
+                },
+              })
+            }
+          >
+            <Ionicons
+              name="git-compare-outline"
+              size={21}
+              color="#FFFFFF"
+            />
+
+            <Text style={styles.compareButtonText}>
+              Compare Hospitals
+            </Text>
+          </Pressable>
+        )}
 
         {/* INFO */}
         <View style={styles.infoBox}>
@@ -521,6 +638,68 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
+  hospitalCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#E2EBE9",
+    padding: 13,
+    marginBottom: 10,
+  },
+
+  hospitalIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 13,
+    backgroundColor: "#F4EFF9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+
+  hospitalInfo: {
+    flex: 1,
+  },
+
+  hospitalNumber: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#8B57B5",
+    marginBottom: 3,
+  },
+
+  hospitalName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#30484C",
+  },
+
+  hospitalType: {
+    fontSize: 11,
+    color: "#718387",
+    marginTop: 4,
+  },
+
+  removeButton: {
+    padding: 5,
+  },
+
+  countBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 15,
+  },
+
+  countText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#70459A",
+    marginLeft: 6,
+  },
+
   addButton: {
     height: 54,
     borderRadius: 14,
@@ -535,6 +714,23 @@ const styles = StyleSheet.create({
   },
 
   addButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+    marginLeft: 8,
+  },
+
+  compareButton: {
+    height: 54,
+    borderRadius: 14,
+    backgroundColor: "#267D73",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 12,
+  },
+
+  compareButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "700",
