@@ -46,7 +46,6 @@ const calculateDistance = (
 // =====================================================
 // API
 // =====================================================
-
 const API_URL = "http://192.168.1.245:8000";
 
 export default function ResultScreen() {
@@ -73,16 +72,6 @@ export default function ResultScreen() {
 
   const [userLongitude, setUserLongitude] =
     useState<number | null>(null);
-
-  // =====================================================
-  // LOAD RECOMMENDATIONS
-  // =====================================================
-
-  useEffect(() => {
-    if (treatment) {
-      getRecommendations(treatment);
-    }
-  }, [treatment]);
 
   // =====================================================
   // GET HOSPITAL COORDINATES FROM ADDRESS
@@ -132,7 +121,6 @@ export default function ResultScreen() {
                 hospital.hospital_name,
                 error
               );
-
               return hospital;
             }
           }
@@ -146,9 +134,15 @@ export default function ResultScreen() {
   // GET RECOMMENDATIONS
   // =====================================================
 
-  const getRecommendations = async (
+  useEffect(() => {
+    if (!treatment) return;
+    
+    getRecommendations(treatment);
+  }, [treatment]);
+
+  async function getRecommendations(
     service: string
-  ) => {
+  ){
     setLoading(true);
     setHospitals([]);
 
@@ -272,7 +266,7 @@ try {
       ) {
         Alert.alert(
           "No Hospitals Found",
-          `No hospitals were found for "${service}".`
+          `No hospitals were found for "{service}".`
         );
       }
     } catch (error) {
@@ -288,7 +282,8 @@ try {
     } finally {
       setLoading(false);
     }
-  };
+  }
+
 
   // =====================================================
   // OPEN HOSPITAL DETAILS
