@@ -970,7 +970,6 @@ export default function HomeScreen() {
                 ? "Finding..."
                 : "Near Me"}
             </Text>
-
           </Pressable>
 
 
@@ -979,7 +978,7 @@ export default function HomeScreen() {
               styles.quickCard,
               styles.greenCard,
             ]}
-            onPress={searchHospitals}
+            onPress={() => router.push("/search")}
           >
 
             <View
@@ -1005,7 +1004,7 @@ export default function HomeScreen() {
           </Pressable>
 
 
-                 {/* COMPARE */}
+          {/* COMPARE */}
 
           <Pressable
             style={[
@@ -1037,28 +1036,23 @@ export default function HomeScreen() {
               styles.quickCard,
               styles.yellowCard,
             ]}
+            onPress={() => router.push("/saved")}
           >
-
-            <View
-              style={styles.quickIconYellow}
-            >
-
+            <View style={styles.quickIconYellow}>
               <Ionicons
                 name="bookmark-outline"
                 size={22}
                 color="#A77A17"
               />
-
             </View>
-
+          
             <Text style={styles.quickTitle}>
               Saved
             </Text>
-
+          
             <Text style={styles.quickSubtitle}>
               Hospitals
             </Text>
-
           </Pressable>
 
         </View>
