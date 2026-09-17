@@ -9,9 +9,11 @@ import {
 } from "react-native";
 
 export default function CompareResultScreen() {
-  const { selectedHospitals } = useLocalSearchParams<{
-    selectedHospitals?: string;
-  }>();
+  const { selectedHospitals, search } =
+    useLocalSearchParams<{
+      selectedHospitals?: string;
+      search?: string;
+    }>();
 
   let hospitals: any[] = [];
 
@@ -25,39 +27,66 @@ export default function CompareResultScreen() {
 
   return (
     <View style={styles.screen}>
+      {/* HEADER */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={23} color="#263638" />
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <Ionicons
+            name="arrow-back"
+            size={23}
+            color="#263638"
+          />
         </Pressable>
 
-        <Text style={styles.headerTitle}>Compare Hospitals</Text>
+        <Text style={styles.headerTitle}>
+          Compare Hospitals
+        </Text>
 
         <View style={{ width: 23 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* TREATMENT */}
         <View style={styles.treatmentRow}>
           <Text style={styles.treatmentText}>
-            Treatment: <Text style={styles.bold}>Cardiology</Text>
+            Treatment:{" "}
+            <Text style={styles.bold}>
+              {search ?? "—"}
+            </Text>
           </Text>
 
-          <Text style={styles.change}>Change</Text>
+          <Pressable
+            onPress={() => router.back()}
+          >
+            <Text style={styles.change}>
+              Change
+            </Text>
+          </Pressable>
         </View>
 
+        {/* COMPARISON CARD */}
         <View style={styles.card}>
+          {/* HOSPITAL HEADERS */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalContent}
           >
             {hospitals.map((hospital, index) => (
               <View
                 key={
                   hospital.hospital_id ??
                   hospital.id ??
-                  index
+                  `${hospital.hospital_name}-${index}`
                 }
                 style={styles.hospitalColumn}
               >
+                {/* IMAGE / ICON */}
                 <View style={styles.imagePlaceholder}>
                   <Ionicons
                     name="business-outline"
@@ -66,55 +95,81 @@ export default function CompareResultScreen() {
                   />
                 </View>
 
+                {/* NAME */}
                 <Text
                   style={styles.hospitalName}
                   numberOfLines={2}
                 >
-                  {hospital.hospital_name ?? "Hospital"}
+                  {hospital.hospital_name ??
+                    "Hospital"}
                 </Text>
 
+                {/* QUALITY SCORE */}
                 <Text style={styles.rating}>
-                  ⭐ {hospital.patient_rating ?? "—"}
+                  ⭐{" "}
+                  {hospital.quality_score != null
+                    ? `${hospital.quality_score}/5`
+                    : "—"}
                 </Text>
               </View>
             ))}
           </ScrollView>
 
+          {/* COST */}
           <ComparisonRow
             label="Cost (Approx.)"
             hospitals={hospitals}
-            value={(h) => h.tariff_range ?? "—"}
+            value={(hospital) =>
+              hospital.treatment_cost != null
+                ? `₹${hospital.treatment_cost}`
+                : hospital.tariff_range ?? "—"
+            }
           />
 
+          {/* DISTANCE */}
           <ComparisonRow
             label="Distance"
             hospitals={hospitals}
-            value={(h) =>
-              h.distance != null
-                ? `${Number(h.distance).toFixed(1)} km`
+            value={(hospital) =>
+              hospital.distance != null
+                ? `${Number(
+                    hospital.distance
+                  ).toFixed(1)} km`
                 : "—"
             }
           />
 
+          {/* HOSPITAL TYPE */}
           <ComparisonRow
             label="Hospital Type"
             hospitals={hospitals}
-            value={(h) => h.hospital_type ?? "—"}
+            value={(hospital) =>
+              hospital.hospital_type ?? "—"
+            }
           />
 
+          {/* ACCREDITATION */}
           <ComparisonRow
             label="Accreditation"
             hospitals={hospitals}
-            value={(h) => h.accreditation ?? "—"}
+            value={(hospital) =>
+              hospital.accreditation ?? "—"
+            }
           />
 
+          {/* QUALITY SCORE */}
           <ComparisonRow
-            label="Patient Rating"
+            label="Quality Score"
             hospitals={hospitals}
-            value={(h) => h.patient_rating ?? "—"}
+            value={(hospital) =>
+              hospital.quality_score != null
+                ? `${hospital.quality_score}/5`
+                : "—"
+            }
           />
         </View>
 
+        {/* RECOMMENDATION */}
         <View style={styles.recommendation}>
           <View style={styles.bulb}>
             <Ionicons
@@ -124,7 +179,7 @@ export default function CompareResultScreen() {
             />
           </View>
 
-          <View style={{ flex: 1 }}>
+          <View style={styles.recommendationContent}>
             <Text style={styles.recommendationTitle}>
               Key Recommendation
             </Text>
@@ -141,6 +196,10 @@ export default function CompareResultScreen() {
   );
 }
 
+/* =========================================================
+   COMPARISON ROW
+========================================================= */
+
 function ComparisonRow({
   label,
   hospitals,
@@ -152,12 +211,23 @@ function ComparisonRow({
 }) {
   return (
     <View style={styles.row}>
+      {/* LABEL */}
       <View style={styles.labelCell}>
-        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.label}>
+          {label}
+        </Text>
       </View>
 
+      {/* HOSPITAL VALUES */}
       {hospitals.map((hospital, index) => (
-        <View style={styles.valueCell} key={index}>
+        <View
+          style={styles.valueCell}
+          key={
+            hospital.hospital_id ??
+            hospital.id ??
+            `${label}-${index}`
+          }
+        >
           <Text style={styles.value}>
             {value(hospital)}
           </Text>
@@ -167,39 +237,58 @@ function ComparisonRow({
   );
 }
 
+/* =========================================================
+   STYLES
+========================================================= */
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4FAF9",
+    backgroundColor: "#F5F8F7",
   },
 
+  scrollContent: {
+    paddingBottom: 30,
+  },
+
+  /* HEADER */
+
   header: {
-    height: 62,
+    height: 64,
     backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     borderBottomWidth: 1,
     borderBottomColor: "#E5ECEA",
   },
 
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#263638",
+  backButton: {
+    width: 23,
+    height: 40,
+    justifyContent: "center",
   },
+
+  headerTitle: {
+    fontSize: 19,
+    fontWeight: "700",
+    color: "#173B3A",
+  },
+
+  /* TREATMENT */
 
   treatmentRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 13,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
   },
 
   treatmentText: {
-    fontSize: 12,
-    color: "#536467",
+    fontSize: 14,
+    color: "#596C70",
   },
 
   bold: {
@@ -208,108 +297,139 @@ const styles = StyleSheet.create({
   },
 
   change: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#267D73",
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#8B57B5",
   },
+
+  /* MAIN CARD */
 
   card: {
-    marginHorizontal: 14,
+    marginHorizontal: 16,
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 10,
-    elevation: 2,
+    borderRadius: 18,
+    paddingVertical: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E7EEEC",
   },
 
+  horizontalContent: {
+    paddingHorizontal: 10,
+  },
+
+  /* HOSPITAL COLUMN */
+
   hospitalColumn: {
-    width: 105,
+    width: 145,
     alignItems: "center",
-    marginHorizontal: 5,
+    paddingHorizontal: 8,
   },
 
   imagePlaceholder: {
-    width: 82,
-    height: 62,
-    borderRadius: 7,
-    backgroundColor: "#E8F2F0",
+    width: 72,
+    height: 72,
+    borderRadius: 14,
+    backgroundColor: "#EAF5F3",
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 10,
   },
 
   hospitalName: {
-    marginTop: 5,
-    textAlign: "center",
-    fontSize: 10,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
     color: "#263638",
-    height: 28,
+    textAlign: "center",
+    lineHeight: 19,
+    minHeight: 38,
   },
 
   rating: {
-    fontSize: 10,
-    marginTop: 2,
-    color: "#4B5557",
+    marginTop: 6,
+    fontSize: 13,
+    color: "#596C70",
+    fontWeight: "600",
   },
+
+  /* COMPARISON ROW */
 
   row: {
     flexDirection: "row",
-    minHeight: 39,
+    alignItems: "stretch",
     borderTopWidth: 1,
-    borderTopColor: "#E8EEEC",
-    alignItems: "center",
+    borderTopColor: "#E8EFED",
+    marginTop: 16,
+    minHeight: 58,
   },
 
   labelCell: {
-    width: 100,
-    paddingLeft: 5,
+    width: 120,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    backgroundColor: "#F8FAF9",
   },
 
   label: {
-    fontSize: 9,
-    color: "#687679",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#53666A",
+    lineHeight: 17,
   },
 
   valueCell: {
-    width: 110,
+    width: 145,
+    minHeight: 58,
     alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
   },
 
   value: {
-    fontSize: 9,
+    fontSize: 12,
     color: "#263638",
     textAlign: "center",
+    lineHeight: 17,
   },
 
+  /* RECOMMENDATION */
+
   recommendation: {
-    margin: 14,
-    padding: 13,
-    borderRadius: 10,
-    backgroundColor: "#EEF7F5",
-    borderWidth: 1,
-    borderColor: "#D8EAE6",
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: "#FFFDF4",
+    borderRadius: 16,
+    padding: 16,
     flexDirection: "row",
-    gap: 10,
+    alignItems: "flex-start",
+    borderWidth: 1,
+    borderColor: "#F3E7B6",
   },
 
   bulb: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#FFF7DD",
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#FFF4CC",
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 12,
+  },
+
+  recommendationContent: {
+    flex: 1,
   },
 
   recommendationTitle: {
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: "700",
-    color: "#425355",
+    color: "#4A421E",
+    marginBottom: 5,
   },
 
   recommendationText: {
-    marginTop: 3,
-    fontSize: 9,
-    lineHeight: 14,
-    color: "#6B7779",
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#6C643A",
   },
 });
