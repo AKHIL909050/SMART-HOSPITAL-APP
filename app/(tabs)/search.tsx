@@ -1,6 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Alert,
   Pressable,
@@ -50,20 +50,16 @@ const filters = [
 ];
 
 export default function SearchScreen() {
-  const { search } = useLocalSearchParams<{ search?: string }>();
+  const { search } = useLocalSearchParams();
 
-  const [searchText, setSearchText] = useState(search ?? "");
+const [searchText, setSearchText] = useState(
+  typeof search === "string" ? search : ""
+);
 
   /*
    * If another page sends a search value,
    * put that value into the search box.
    */
-  useEffect(() => {
-    if (search) {
-      setSearchText(search);
-    }
-  }, [search]);
-
   /*
    * Send the treatment/service to the Result page.
    */

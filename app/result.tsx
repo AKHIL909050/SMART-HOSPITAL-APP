@@ -49,9 +49,13 @@ const calculateDistance = (
 const API_URL = "http://192.168.1.245:8000";
 
 export default function ResultScreen() {
-  const { search } =
-    useLocalSearchParams<{ search?: string }>();
-
+  const { search, compareMode, selectedHospitals } =
+    useLocalSearchParams<{
+      search?: string;
+      compareMode?: string;
+      selectedHospitals?: string;
+    }>();
+  const isCompareMode = compareMode === "true";
   const treatment =
     typeof search === "string"
       ? search.trim()
@@ -288,6 +292,64 @@ try {
   // =====================================================
   // OPEN HOSPITAL DETAILS
   // =====================================================
+  const selectHospitalForCompare = (hospital: any) => {
+    let currentHospitals: any[] = [];
+
+    try {
+      if (selectedHospitals) {
+        currentHospitals = JSON.parse(
+          selectedHospitals as string
+        );
+      }
+    } catch (error) {
+      console.log("SELECTED HOSPITALS PARSE ERROR:", error);
+    }
+
+    // Prevent duplicate hospitals
+    const hospitalId =
+      hospital.hospital_id ??
+      hospital.id ??
+      hospital.hospital_name;
+
+    const alreadySelected = currentHospitals.some(
+      (item) =>
+        (item.hospital_id ??
+          item.id ??
+          item.hospital_name) === hospitalId
+    );
+
+    if (alreadySelected) {
+      Alert.alert(
+        "Hospital Already Selected",
+        "Please select another hospital."
+      );
+      return;
+    }
+
+    // Maximum 5 hospitals
+    if (currentHospitals.length >= 5) {
+      Alert.alert(
+        "Maximum Reached",
+        "You can compare up to 5 hospitals."
+      );
+      return;
+    }
+
+    const updatedHospitals = [
+      ...currentHospitals,
+      hospital,
+    ];
+
+    router.replace({
+      pathname: "/compare",
+      params: {
+        search: treatment,
+        selectedHospitals: JSON.stringify(
+          updatedHospitals
+        ),
+      },
+    });
+  };
 
   const openHospitalDetails = (
     hospital: any
@@ -870,7 +932,28 @@ try {
                           </View>
                         )}
                       </View>
+                      {/* =================================================
+                          COMPARE SELECT BUTTON
+                      ================================================= */}
 
+                      {isCompareMode && (
+                        <Pressable
+                          style={styles.selectHospitalButton}
+                          onPress={() =>
+                            selectHospitalForCompare(hospital)
+                          }
+                        >
+                          <Ionicons
+                            name="git-compare-outline"
+                            size={17}
+                            color="#FFFFFF"
+                          />
+
+                          <Text style={styles.selectHospitalText}>
+                            Select Hospital
+                          </Text>
+                        </Pressable>
+                      )}
                       {/* =================================================
                           DETAILS
                       ================================================= */}
@@ -1408,5 +1491,21 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#FFFFFF",
     marginLeft: 6,
+  },
+    selectHospitalButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8B57B5",
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginTop: 13,
+  },
+
+  selectHospitalText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+    marginLeft: 7,
   },
 });
